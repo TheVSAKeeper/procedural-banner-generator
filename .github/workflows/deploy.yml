@@ -30,9 +30,13 @@ jobs:
       - name: Publish
         run: dotnet publish ProceduralBannerGenerator.csproj -c Release -o release
 
-      # Project pages live under /<repo>/ — переписываем base href с "/" под подпуть.
-      - name: Set base href for project pages
-        run: sed -i 's|<base href="/" />|<base href="/${{ github.event.repository.name }}/" />|g' release/wwwroot/index.html
+      # Project pages live under /<repo>/ — переписываем base под подпуть:
+      #  - index.html: <base href>
+      #  - service-worker.js (опубликованный): const base, иначе офлайн-кэш резолвит ассеты от корня домена
+      - name: Set base path for project pages
+        run: |
+          sed -i 's|<base href="/" />|<base href="/${{ github.event.repository.name }}/" />|g' release/wwwroot/index.html
+          sed -i 's|const base = "/";|const base = "/${{ github.event.repository.name }}/";|g' release/wwwroot/service-worker.js
 
       # SPA-фолбэк: любой неизвестный путь отдаёт index.html.
       - name: SPA fallback + disable Jekyll
