@@ -27,25 +27,12 @@
                     <label class="sm">Ширина<input type="number" @bind="_width" @bind:after="RequestRender" /></label>
                     <label class="sm">Высота<input type="number" @bind="_height" @bind:after="RequestRender" /></label>
                 </div>
-                <label class="chk"><input type="checkbox" @bind="_transparent" @bind:after="RequestRender" />Прозрачный
-                                                                                                             фон</label>
-                <label>Задержка отрисовки, мс<input type="number" @bind="_renderDebounceMs" min="0" max="3000"
-                                                    step="10" /></label>
-                <div class="actions">
-                    <button @onclick="Render" disabled="@(_typeface is null)">▶ Сгенерировать</button>
-                    <button class="btn-ghost" @onclick="Randomize" disabled="@(_typeface is null)">🎲 Seed</button>
-                    <button class="btn-danger" @onclick="ResetStyle" disabled="@(_typeface is null)">↺ Сброс стиля
+                <div class="row">
+                    <label class="sm">Задержка отрисовки, мс<input type="number" @bind="_renderDebounceMs" min="0"
+                                                                   max="3000" step="10" /></label>
+                    <button type="button" class="toggle @(_transparent ? "on" : null)" @onclick="ToggleTransparent"
+                            title="Прозрачный фон вместо подложки-градиента">@(_transparent ? "☑" : "☐") Фон
                     </button>
-                    @if (_imgSrc is not null)
-                    {
-                        <a class="btn btn-ghost" download="banner.png" href="@_imgSrc">⬇ PNG</a>
-                    }
-                    @if (_exportHref is not null)
-                    {
-                        <a class="btn btn-ghost" download="banner-style.json" href="@_exportHref">⬇ Стиль</a>
-                    }
-                    <label class="btn btn-ghost">⬆ Стиль<InputFile OnChange="ImportStyle" accept=".json,application/json"
-                                                                    style="display:none" /></label>
                 </div>
             </div>
         </section>
@@ -72,6 +59,36 @@
             }
         </section>
     </div>
+
+    <section class="toolbar">
+        <span class="module-head">Действия</span>
+        <div class="actions">
+            <button @onclick="Render" disabled="@(_typeface is null)"
+                    title="Перерисовать баннер с текущими параметрами">▶ Сгенерировать
+            </button>
+            <button class="btn-ghost" @onclick="Randomize" disabled="@(_typeface is null)"
+                    title="Новый случайный seed – меняет рисунок потёртостей и брызг">🎲 Случайный вид
+            </button>
+            <button class="btn-danger" @onclick="ResetStyle" disabled="@(_typeface is null)"
+                    title="Вернуть все настройки стиля к значениям по умолчанию">↺ Сбросить стиль
+            </button>
+            @if (_imgSrc is not null)
+            {
+                <a class="btn btn-ghost" download="banner.png" href="@_imgSrc"
+                   title="Скачать готовый баннер картинкой PNG">⬇ Скачать PNG</a>
+            }
+            @if (_exportHref is not null)
+            {
+                <a class="btn btn-ghost" download="banner-style.json" href="@_exportHref"
+                   title="Сохранить текущие настройки стиля в файл JSON">⬇ Сохранить стиль</a>
+            }
+            <label class="btn btn-ghost" title="Загрузить настройки стиля из ранее сохранённого файла JSON">⬆ Загрузить
+                                                                                                            стиль
+                <InputFile
+                    OnChange="ImportStyle" accept=".json,application/json" style="display:none" />
+            </label>
+        </div>
+    </section>
 
     <details class="adv">
         <summary>Расширенная калибровка стиля</summary>
@@ -339,6 +356,12 @@
         _style = new();
         Render();
         await SaveStateAsync();
+    }
+
+    private void ToggleTransparent()
+    {
+        _transparent = !_transparent;
+        RequestRender();
     }
 
     private void Apply(BannerStyle s)
