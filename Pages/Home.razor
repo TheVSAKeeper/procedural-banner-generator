@@ -1,0 +1,100 @@
+@page "/"
+@using SkiaSharp
+@inject HttpClient Http
+
+<PageTitle>Генератор баннеров</PageTitle>
+
+<div class="wrap">
+    <h1>Процедурный генератор баннеров</h1>
+    <p class="hint">Стиль превью Tarkov-стримов. Один и тот же seed даёт одинаковую картинку.</p>
+
+    <div class="grid">
+        <label>Заголовок<input @bind="_title" @bind:event="oninput" placeholder="290. ЛЕДОКОЛ XIX" /></label>
+        <label>Подзаголовок<input @bind="_subtitle" @bind:event="oninput" placeholder="КОРОЛЬ МАШИННОГО ЗАЛА" /></label>
+        <label>Третья строка<input @bind="_tagline" @bind:event="oninput" placeholder="ник / дата / тег (необязательно)" /></label>
+        <div class="row">
+            <label class="sm">Seed<input type="number" @bind="_seed" @bind:event="oninput" /></label>
+            <label class="sm">Ширина<input type="number" @bind="_width" @bind:event="oninput" /></label>
+            <label class="sm">Высота<input type="number" @bind="_height" @bind:event="oninput" /></label>
+            <label class="chk"><input type="checkbox" @bind="_transparent" />Прозрачный фон</label>
+        </div>
+        <div class="row">
+            <button @onclick="Render" disabled="@(_typeface is null)">Сгенерировать</button>
+            <button @onclick="Randomize" disabled="@(_typeface is null)">🎲 Случайный seed</button>
+            @if (_imgSrc is not null)
+            {
+                <a class="btn" download="banner.png" href="@_imgSrc">⬇ Скачать PNG</a>
+            }
+        </div>
+    </div>
+
+    @if (_typeface is null)
+    {
+        <p class="status">Загрузка шрифта…</p>
+    }
+    else if (_error is not null)
+    {
+        <p class="status err">@_error</p>
+    }
+
+    @if (_imgSrc is not null)
+    {
+        <img class="preview" src="@_imgSrc" alt="Баннер" />
+    }
+</div>
+
+@code {
+    private string _title = "290. ЛЕДОКОЛ XIX";
+    private string _subtitle = "КОРОЛЬ МАШИННОГО ЗАЛА";
+    private string _tagline = "";
+    private int _seed = 290;
+    private int _width = 1280;
+    private int _height = 720;
+    private bool _transparent;
+
+    private SKTypeface? _typeface;
+    private string? _imgSrc;
+    private string? _error;
+
+    protected override async Task OnInitializedAsync()
+    {
+        // Шрифт грузим один раз; FromData держит копию байтов — HttpClient можно отпускать.
+        var bytes = await Http.GetByteArrayAsync("Bender-Black.otf");
+        _typeface = SKTypeface.FromData(SKData.CreateCopy(bytes));
+        Render();
+    }
+
+    private void Randomize()
+    {
+        _seed = Random.Shared.Next(1, 1_000_000);
+        Render();
+    }
+
+    private void Render()
+    {
+        if (_typeface is null)
+            return;
+
+        try
+        {
+            var spec = new BannerSpec
+            {
+                Title = string.IsNullOrWhiteSpace(_title) ? " " : _title,
+                Subtitle = _subtitle ?? "",
+                Tagline = string.IsNullOrWhiteSpace(_tagline) ? null : _tagline,
+                Seed = _seed,
+                Width = Math.Clamp(_width, 320, 3840),
+                Height = Math.Clamp(_height, 180, 2160),
+                Transparent = _transparent,
+            };
+
+            var png = new BannerRenderer(new BannerStyle()).RenderPng(spec, _typeface);
+            _imgSrc = "data:image/png;base64," + Convert.ToBase64String(png);
+            _error = null;
+        }
+        catch (Exception ex)
+        {
+            _error = ex.Message;
+        }
+    }
+}
