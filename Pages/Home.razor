@@ -1,6 +1,8 @@
 @page "/"
 @using SkiaSharp
+@using System.Text.Json
 @inject HttpClient Http
+@inject IJSRuntime JS
 
 <PageTitle>Генератор баннеров</PageTitle>
 
@@ -38,6 +40,12 @@
                     {
                         <a class="btn btn-ghost" download="banner.png" href="@_imgSrc">⬇ PNG</a>
                     }
+                    @if (_exportHref is not null)
+                    {
+                        <a class="btn btn-ghost" download="banner-style.json" href="@_exportHref">⬇ Стиль</a>
+                    }
+                    <label class="btn btn-ghost">⬆ Стиль<InputFile OnChange="ImportStyle" accept=".json,application/json"
+                                                                    style="display:none" /></label>
                 </div>
             </div>
         </section>
@@ -303,7 +311,10 @@
 
     private SKTypeface? _typeface;
     private string? _imgSrc;
+    private string? _exportHref;
     private string? _error;
+
+    private const string StorageKey = "banner-state-v1";
 
     private int _renderDebounceMs = 150;
     private CancellationTokenSource? _renderDebounce;
@@ -312,19 +323,22 @@
     {
         var bytes = await Http.GetByteArrayAsync("Bender-Black.otf");
         _typeface = SKTypeface.FromData(SKData.CreateCopy(bytes));
+        await LoadStateAsync();
         Render();
     }
 
-    private void Randomize()
+    private async Task Randomize()
     {
         _seed = Random.Shared.Next(1, 1_000_000);
         Render();
+        await SaveStateAsync();
     }
 
-    private void ResetStyle()
+    private async Task ResetStyle()
     {
         _style = new();
         Render();
+        await SaveStateAsync();
     }
 
     private void Apply(BannerStyle s)
@@ -349,6 +363,7 @@
         }
 
         Render();
+        await SaveStateAsync();
         StateHasChanged();
     }
 
@@ -397,6 +412,8 @@
         if (_typeface is null)
             return;
 
+        _exportHref = "data:application/json;charset=utf-8," + Uri.EscapeDataString(_style.ToJson());
+
         try
         {
             var spec = new BannerSpec
@@ -418,6 +435,83 @@
         {
             _error = ex.Message;
         }
+    }
+
+    private async Task SaveStateAsync()
+    {
+        var state = new SavedState
+        {
+            Title = _title, Subtitle = _subtitle, Tagline = _tagline,
+            Seed = _seed, Width = _width, Height = _height,
+            Transparent = _transparent, RenderDebounceMs = _renderDebounceMs, Style = _style,
+        };
+
+        try
+        {
+            await JS.InvokeVoidAsync("localStorage.setItem", StorageKey, JsonSerializer.Serialize(state));
+        }
+        catch
+        {
+            // ponytail: localStorage может быть недоступен (private mode / quota / отключён) – тихо без сохранения
+        }
+    }
+
+    private async Task LoadStateAsync()
+    {
+        try
+        {
+            var json = await JS.InvokeAsync<string?>("localStorage.getItem", StorageKey);
+            if (string.IsNullOrEmpty(json))
+                return;
+
+            var s = JsonSerializer.Deserialize<SavedState>(json);
+            if (s is null)
+                return;
+
+            _title = s.Title;
+            _subtitle = s.Subtitle;
+            _tagline = s.Tagline ?? "";
+            _seed = s.Seed;
+            _width = s.Width;
+            _height = s.Height;
+            _transparent = s.Transparent;
+            _renderDebounceMs = s.RenderDebounceMs;
+            _style = s.Style;
+        }
+        catch
+        {
+            // битый снимок или недоступное хранилище – стартуем с дефолтов
+        }
+    }
+
+    private async Task ImportStyle(InputFileChangeEventArgs e)
+    {
+        try
+        {
+            await using var stream = e.File.OpenReadStream(1024 * 1024);
+            using var reader = new StreamReader(stream);
+            _style = BannerStyle.FromJson(await reader.ReadToEndAsync());
+            _error = null;
+            Render();
+            await SaveStateAsync();
+        }
+        catch (Exception ex)
+        {
+            _error = "Импорт стиля не удался: " + ex.Message;
+        }
+    }
+
+    private sealed record SavedState
+    {
+        public string Title { get; init; } = "";
+        public string Subtitle { get; init; } = "";
+        public string? Tagline { get; init; }
+        public int Seed { get; init; } = 290;
+        public int Width { get; init; } = 1280;
+        public int Height { get; init; } = 720;
+        public bool Transparent { get; init; }
+        public int RenderDebounceMs { get; init; } = 150;
+        public BannerStyle Style { get; init; } = new();
     }
 
 }
