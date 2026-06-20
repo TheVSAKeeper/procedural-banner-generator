@@ -11,7 +11,8 @@
     <div class="grid">
         <label>Заголовок<input @bind="_title" @bind:event="oninput" placeholder="290. ЛЕДОКОЛ XIX" /></label>
         <label>Подзаголовок<input @bind="_subtitle" @bind:event="oninput" placeholder="КОРОЛЬ МАШИННОГО ЗАЛА" /></label>
-        <label>Третья строка<input @bind="_tagline" @bind:event="oninput" placeholder="ник / дата / тег (необязательно)" /></label>
+        <label>Третья строка<input @bind="_tagline" @bind:event="oninput"
+                                   placeholder="ник / дата / тег (необязательно)" /></label>
         <div class="row">
             <label class="sm">Seed<input type="number" @bind="_seed" @bind:event="oninput" /></label>
             <label class="sm">Ширина<input type="number" @bind="_width" @bind:event="oninput" /></label>
@@ -88,7 +89,7 @@
                 Transparent = _transparent,
             };
 
-            var png = new BannerRenderer(new BannerStyle()).RenderPng(spec, _typeface);
+            var png = new BannerRenderer(new()).RenderPng(spec, _typeface);
             _imgSrc = "data:image/png;base64," + Convert.ToBase64String(png);
             _error = null;
         }
@@ -97,4 +98,5 @@
             _error = ex.Message;
         }
     }
+
 }

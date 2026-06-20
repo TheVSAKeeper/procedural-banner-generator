@@ -1,0 +1,4 @@
+<Solution>
+    <Project Path="BannerCore/BannerCore.csproj" />
+    <Project Path="ProceduralBannerGenerator.csproj" />
+</Solution>
