@@ -1,11 +1,23 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="ru">
 
 <head>
     <meta charset="utf-8" />
     <meta content="width=device-width, initial-scale=1.0" name="viewport" />
     <title>Процедурный генератор баннеров</title>
+    <meta
+        content="Клиентский генератор стилизованных баннеров для превью стримов: 3D-заголовок, рваная плашка, процедурный гранж по seed. Весь рендер в браузере, без серверов."
+        name="description" />
     <base href="/" />
+
+    <meta content="website" property="og:type" />
+    <meta content="Процедурный генератор баннеров" property="og:title" />
+    <meta
+        content="Обложка для видео за пару кликов: 3D-заголовок, рваная плашка, гранж по seed. Рендер в браузере на Blazor + SkiaSharp, без серверов."
+        property="og:description" />
+    <meta content="https://thevsakeeper.github.io/procedural-banner-generator/" property="og:url" />
+    <meta content="https://thevsakeeper.github.io/procedural-banner-generator/icon-512.png" property="og:image" />
+    <meta content="summary" name="twitter:card" />
     <link id="webassembly" rel="preload" />
     <link href="https://fonts.googleapis.com" rel="preconnect" />
     <link crossorigin href="https://fonts.gstatic.com" rel="preconnect" />
@@ -31,9 +43,16 @@
     </div>
 
     <div id="blazor-error-ui">
-        An unhandled error has occurred.
-        <a class="reload" href=".">Reload</a>
-        <span class="dismiss">🗙</span>
+        Произошла непредвиденная ошибка.
+        <a class="reload" href=".">Перезагрузить</a>
+        <span aria-hidden="true" class="dismiss" title="Закрыть">
+            <svg fill="none" height="16" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"
+                 stroke-width="2"
+                 viewBox="0 0 24 24" width="16">
+                <path d="M18 6 6 18" />
+                <path d="m6 6 12 12" />
+            </svg>
+        </span>
     </div>
     <script src="_framework/blazor.webassembly#[.{fingerprint}].js"></script>
     <script>navigator.serviceWorker.register('service-worker.js', {updateViaCache: 'none'});</script>

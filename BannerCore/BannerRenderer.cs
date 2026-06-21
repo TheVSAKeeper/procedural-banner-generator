@@ -122,10 +122,18 @@ public sealed partial class BannerRenderer(BannerStyle style)
     internal static (string? Prefix, string Main) SplitTitle(string title)
     {
         var match = TitlePrefixRegex().Match(title);
-        return match.Success ? (match.Groups[1].Value, match.Groups[2].Value) : (null, title);
+
+        if (!match.Success)
+        {
+            return (null, title);
+        }
+
+        return match.Groups[1].Success
+            ? (match.Groups[1].Value, match.Groups[2].Value)
+            : (match.Groups[3].Value, match.Groups[4].Value);
     }
 
-    [GeneratedRegex(@"^(\d+[.:]?)\s+(.+)$")]
+    [GeneratedRegex(@"^(\d+[.:])\s*(.+)$|^(\d+)\s+(.+)$")]
     private static partial Regex TitlePrefixRegex();
 
     private static float MeasureTitleRow(SKFont font, string? prefix, string main, out float spaceWidth)

@@ -24,14 +24,18 @@
                                            placeholder="ник / дата / тег (необязательно)" /></label>
                 <div class="row">
                     <label class="sm">Seed<input type="number" @bind="_seed" @bind:after="RequestRender" /></label>
-                    <label class="sm">Ширина<input type="number" @bind="_width" @bind:after="RequestRender" /></label>
-                    <label class="sm">Высота<input type="number" @bind="_height" @bind:after="RequestRender" /></label>
+                    <label class="sm">Ширина<input type="number" min="320" max="3840" @bind="_width"
+                                                   @bind:after="OnDimsChanged" /></label>
+                    <label class="sm">Высота<input type="number" min="180" max="2160" @bind="_height"
+                                                   @bind:after="OnDimsChanged" /></label>
                 </div>
                 <div class="row">
                     <label class="sm">Задержка отрисовки, мс<input type="number" @bind="_renderDebounceMs" min="0"
                                                                    max="3000" step="10" /></label>
                     <button type="button" class="toggle @(_transparent ? "on" : null)" @onclick="ToggleTransparent"
-                            title="Прозрачный фон вместо подложки-градиента">@(_transparent ? "☑" : "☐") Фон
+                            title="Прозрачный фон вместо подложки-градиента">
+                        <Icon Name="@(_transparent ? "square-check" : "square")" />
+                        Фон
                     </button>
                 </div>
             </div>
@@ -64,28 +68,38 @@
         <span class="module-head">Действия</span>
         <div class="actions">
             <button @onclick="Render" disabled="@(_typeface is null)"
-                    title="Перерисовать баннер с текущими параметрами">▶ Сгенерировать
+                    title="Перерисовать баннер с текущими параметрами">
+                <Icon Name="play" />
+                Сгенерировать
             </button>
             <button class="btn-ghost" @onclick="Randomize" disabled="@(_typeface is null)"
-                    title="Новый случайный seed – меняет рисунок потёртостей и брызг">🎲 Случайный вид
+                    title="Новый случайный seed – меняет рисунок потёртостей и брызг">
+                <Icon Name="dices" />
+                Случайный вид
             </button>
             <button class="btn-danger" @onclick="ResetStyle" disabled="@(_typeface is null)"
-                    title="Вернуть все настройки стиля к значениям по умолчанию">↺ Сбросить стиль
+                    title="Вернуть все настройки стиля к значениям по умолчанию">
+                <Icon Name="rotate-ccw" />
+                Сбросить стиль
             </button>
             @if (_imgSrc is not null)
             {
                 <a class="btn btn-ghost" download="banner.png" href="@_imgSrc"
-                   title="Скачать готовый баннер картинкой PNG">⬇ Скачать PNG</a>
+                   title="Скачать готовый баннер картинкой PNG">
+                    <Icon Name="download" />
+                    Скачать PNG</a>
             }
             @if (_exportHref is not null)
             {
                 <a class="btn btn-ghost" download="banner-style.json" href="@_exportHref"
-                   title="Сохранить текущие настройки стиля в файл JSON">⬇ Сохранить стиль</a>
+                   title="Сохранить текущие настройки стиля в файл JSON">
+                    <Icon Name="save" />
+                    Сохранить стиль</a>
             }
-            <label class="btn btn-ghost" title="Загрузить настройки стиля из ранее сохранённого файла JSON">⬆ Загрузить
-                                                                                                            стиль
-                <InputFile
-                    OnChange="ImportStyle" accept=".json,application/json" style="display:none" />
+            <label class="btn btn-ghost" title="Загрузить настройки стиля из ранее сохранённого файла JSON">
+                <Icon Name="upload" />
+                Загрузить стиль
+                <InputFile OnChange="ImportStyle" accept=".json,application/json" class="visually-hidden-file" />
             </label>
         </div>
     </section>
@@ -361,6 +375,13 @@
     private void ToggleTransparent()
     {
         _transparent = !_transparent;
+        RequestRender();
+    }
+
+    private void OnDimsChanged()
+    {
+        _width = Math.Clamp(_width, 320, 3840);
+        _height = Math.Clamp(_height, 180, 2160);
         RequestRender();
     }
 
