@@ -74,6 +74,30 @@
                         <InputFile OnChange="ImportStyle" accept=".json,application/json"
                                    class="visually-hidden-file" />
                     </label>
+                    <label class="btn btn-ghost" title="Своя картинка-фон вместо подложки-градиента">
+                        <Icon Name="image" />
+                        @(_background is null ? "Фон картинкой" : "Сменить фон")
+                        <InputFile OnChange="UploadBackground" accept="image/*" class="visually-hidden-file" />
+                    </label>
+                    @if (_background is not null)
+                    {
+                        <button class="btn-danger" @onclick="ClearBackground" title="Убрать картинку-фон">
+                            <Icon Name="x" />
+                            Убрать фон
+                        </button>
+                    }
+                    <label class="btn btn-ghost" title="Лого/водяной знак картинкой в углу кадра">
+                        <Icon Name="image" />
+                        @(_logo is null ? "Лого картинкой" : "Сменить лого")
+                        <InputFile OnChange="UploadLogo" accept="image/*" class="visually-hidden-file" />
+                    </label>
+                    @if (_logo is not null)
+                    {
+                        <button class="btn-danger" @onclick="ClearLogo" title="Убрать лого">
+                            <Icon Name="x" />
+                            Убрать лого
+                        </button>
+                    }
                 </div>
             </section>
         </div>
@@ -353,6 +377,42 @@
                                   Value="@_style.Tagline.DistressDensity"
                                   ValueChanged="v => Tg(s => s with { DistressDensity = v })" />
                     </details>
+
+                    <details class="sec">
+                        <summary>Фон-картинка</summary>
+                        <p class="hint">Действует, когда загружена своя картинка-фон («Фон картинкой»).</p>
+                        <RangeRow Label="Затемнение фона" Min="0" Max="1" Step="0.01f"
+                                  Value="@_style.Background.DarkenAlpha"
+                                  ValueChanged="v => Bg(s => s with { DarkenAlpha = v })" />
+                        <RangeRow Label="Размытие фона, px" Min="0" Max="30" Step="0.5f"
+                                  Value="@_style.Background.BlurSigma"
+                                  ValueChanged="v => Bg(s => s with { BlurSigma = v })" />
+                    </details>
+
+                    <details class="sec">
+                        <summary>Лого</summary>
+                        <p class="hint">Рисуется, когда загружено лого («Лого картинкой») и включён переключатель ниже.</p>
+                        <label class="prow"><span class="pname">Включено</span><input type="checkbox"
+                                                                                      checked="@_style.Logo.Enabled"
+                                                                                      @onchange="e => Lg(s => s with { Enabled = (bool)e.Value! })" /></label>
+                        <label class="prow"><span class="pname">Угол</span>
+                            <select @onchange="e => Lg(s => s with { Corner = (string)e.Value! })">
+                                <option value="tl" selected="@(_style.Logo.Corner == "tl")">Слева сверху</option>
+                                <option value="tr" selected="@(_style.Logo.Corner == "tr")">Справа сверху</option>
+                                <option value="bl" selected="@(_style.Logo.Corner == "bl")">Слева снизу</option>
+                                <option value="br" selected="@(_style.Logo.Corner == "br")">Справа снизу</option>
+                            </select>
+                        </label>
+                        <RangeRow Label="Размер, доля ширины" Min="0.02f" Max="0.5f" Step="0.005f"
+                                  Value="@_style.Logo.SizeFraction"
+                                  ValueChanged="v => Lg(s => s with { SizeFraction = v })" />
+                        <RangeRow Label="Непрозрачность" Min="0" Max="1" Step="0.01f"
+                                  Value="@_style.Logo.Opacity"
+                                  ValueChanged="v => Lg(s => s with { Opacity = v })" />
+                        <RangeRow Label="Отступ от края" Min="0" Max="0.2f" Step="0.005f"
+                                  Value="@_style.Logo.MarginFraction"
+                                  ValueChanged="v => Lg(s => s with { MarginFraction = v })" />
+                    </details>
                 </div>
             </details>
         </div>
@@ -369,6 +429,10 @@
     private bool _transparent;
 
     private BannerStyle _style = new();
+
+    // TODO: картинки фона/лого держим только в памяти – в localStorage не кладём (квота ~5 МБ, фон легко её пробьёт). После перезагрузки – загрузить заново.
+    private SKImage? _background;
+    private SKImage? _logo;
 
     private SKTypeface? _typeface;
     private string? _imgSrc;
@@ -481,6 +545,73 @@
         Apply(_style with { Tagline = f(_style.Tagline) });
     }
 
+    private void Bg(Func<BannerStyle.BackgroundStyle, BannerStyle.BackgroundStyle> f)
+    {
+        Apply(_style with { Background = f(_style.Background) });
+    }
+
+    private void Lg(Func<BannerStyle.LogoStyle, BannerStyle.LogoStyle> f)
+    {
+        Apply(_style with { Logo = f(_style.Logo) });
+    }
+
+    private async Task UploadBackground(InputFileChangeEventArgs e)
+    {
+        try
+        {
+            _background?.Dispose();
+            _background = await DecodeImage(e.File);
+            _error = null;
+            Render();
+            await SaveStateAsync();
+        }
+        catch (Exception ex)
+        {
+            _error = "Фон не удалось загрузить: " + ex.Message;
+        }
+    }
+
+    private async Task UploadLogo(InputFileChangeEventArgs e)
+    {
+        try
+        {
+            _logo?.Dispose();
+            _logo = await DecodeImage(e.File);
+            if (!_style.Logo.Enabled)
+                _style = _style with { Logo = _style.Logo with { Enabled = true } };
+            _error = null;
+            Render();
+            await SaveStateAsync();
+        }
+        catch (Exception ex)
+        {
+            _error = "Лого не удалось загрузить: " + ex.Message;
+        }
+    }
+
+    private void ClearBackground()
+    {
+        _background?.Dispose();
+        _background = null;
+        Render();
+    }
+
+    private void ClearLogo()
+    {
+        _logo?.Dispose();
+        _logo = null;
+        Render();
+    }
+
+    private static async Task<SKImage> DecodeImage(IBrowserFile file)
+    {
+        await using var stream = file.OpenReadStream(20 * 1024 * 1024);
+        using var ms = new MemoryStream();
+        await stream.CopyToAsync(ms);
+        return SKImage.FromEncodedData(ms.ToArray())
+               ?? throw new InvalidOperationException("формат картинки не распознан");
+    }
+
     private void Render()
     {
         if (_typeface is null)
@@ -501,7 +632,7 @@
                 Transparent = _transparent,
             };
 
-            var png = new BannerRenderer(_style).RenderPng(spec, _typeface);
+            var png = new BannerRenderer(_style).RenderPng(spec, _typeface, _background, _logo);
             _imgSrc = "data:image/png;base64," + Convert.ToBase64String(png);
             _error = null;
         }

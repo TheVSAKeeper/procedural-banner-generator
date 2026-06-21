@@ -626,6 +626,25 @@ button:disabled {
     accent-color: var(--acid);
 }
 
+.prow select {
+    font-family: var(--font-tech);
+    font-size: 0.8rem;
+    width: 100%;
+    padding: 0.22rem 0.3rem;
+    cursor: pointer;
+    color: var(--acid);
+    border: 1px solid var(--line);
+    border-radius: 0;
+    background: var(--bg-2);
+}
+
+.hint {
+    font-family: var(--font-body);
+    font-size: 0.78rem;
+    color: var(--bone-dim);
+    margin: 0.2rem 0 0.55rem;
+}
+
 input[type=checkbox] {
     accent-color: var(--acid);
 }
