@@ -12,321 +12,351 @@
         <div class="hazard"></div>
     </div>
 
-    <div class="layout">
-        <section class="panel">
-            <span class="module-head">Параметры выпуска</span>
-            <div class="grid">
-                <label>Заголовок<input @bind="_title" @bind:after="RequestRender"
-                                       placeholder="290. ЛЕДОКОЛ XIX" /></label>
-                <label>Подзаголовок<input @bind="_subtitle" @bind:after="RequestRender"
-                                          placeholder="КОРОЛЬ МАШИННОГО ЗАЛА" /></label>
-                <label>Третья строка<input @bind="_tagline" @bind:after="RequestRender"
-                                           placeholder="ник / дата / тег (необязательно)" /></label>
-                <div class="row">
-                    <label class="sm">Seed<input type="number" @bind="_seed" @bind:after="RequestRender" /></label>
-                    <label class="sm">Ширина<input type="number" min="320" max="3840" @bind="_width"
-                                                   @bind:after="OnDimsChanged" /></label>
-                    <label class="sm">Высота<input type="number" min="180" max="2160" @bind="_height"
-                                                   @bind:after="OnDimsChanged" /></label>
+    <div class="workspace">
+        <div class="stage">
+            <section class="monitor">
+                <span class="module-head">Выходной кадр</span>
+                <div class="monitor-screen">
+                    @if (_imgSrc is not null)
+                    {
+                        <img class="preview" src="@_imgSrc" alt="Баннер" />
+                    }
+                    else
+                    {
+                        <div class="monitor-empty">— нет сигнала —</div>
+                    }
                 </div>
-                <div class="row">
-                    <label class="sm">Задержка отрисовки, мс<input type="number" @bind="_renderDebounceMs" min="0"
-                                                                   max="3000" step="10" /></label>
-                    <button type="button" class="toggle @(_transparent ? "on" : null)" @onclick="ToggleTransparent"
-                            title="Прозрачный фон вместо подложки-градиента">
-                        <Icon Name="@(_transparent ? "square-check" : "square")" />
-                        Фон
+                @if (_typeface is null)
+                {
+                    <p class="status">Инициализация шрифта…</p>
+                }
+                else if (_error is not null)
+                {
+                    <p class="status err">@_error</p>
+                }
+            </section>
+
+            <section class="toolbar">
+                <span class="module-head">Действия</span>
+                <div class="actions">
+                    <button @onclick="Render" disabled="@(_typeface is null)"
+                            title="Перерисовать баннер с текущими параметрами">
+                        <Icon Name="play" />
+                        Сгенерировать
                     </button>
+                    <button class="btn-ghost" @onclick="Randomize" disabled="@(_typeface is null)"
+                            title="Новый случайный seed – меняет рисунок потёртостей и брызг">
+                        <Icon Name="dices" />
+                        Случайный вид
+                    </button>
+                    <button class="btn-danger" @onclick="ResetStyle" disabled="@(_typeface is null)"
+                            title="Вернуть все настройки стиля к значениям по умолчанию">
+                        <Icon Name="rotate-ccw" />
+                        Сбросить стиль
+                    </button>
+                    @if (_imgSrc is not null)
+                    {
+                        <a class="btn btn-ghost" download="banner.png" href="@_imgSrc"
+                           title="Скачать готовый баннер картинкой PNG">
+                            <Icon Name="download" />
+                            Скачать PNG</a>
+                    }
+                    @if (_exportHref is not null)
+                    {
+                        <a class="btn btn-ghost" download="banner-style.json" href="@_exportHref"
+                           title="Сохранить текущие настройки стиля в файл JSON">
+                            <Icon Name="save" />
+                            Сохранить стиль</a>
+                    }
+                    <label class="btn btn-ghost" title="Загрузить настройки стиля из ранее сохранённого файла JSON">
+                        <Icon Name="upload" />
+                        Загрузить стиль
+                        <InputFile OnChange="ImportStyle" accept=".json,application/json"
+                                   class="visually-hidden-file" />
+                    </label>
                 </div>
-            </div>
-        </section>
+            </section>
+        </div>
 
-        <section class="monitor">
-            <span class="module-head">Выходной кадр</span>
-            <div class="monitor-screen">
-                @if (_imgSrc is not null)
-                {
-                    <img class="preview" src="@_imgSrc" alt="Баннер" />
-                }
-                else
-                {
-                    <div class="monitor-empty">— нет сигнала —</div>
-                }
-            </div>
-            @if (_typeface is null)
-            {
-                <p class="status">Инициализация шрифта…</p>
-            }
-            else if (_error is not null)
-            {
-                <p class="status err">@_error</p>
-            }
-        </section>
+        <div class="controls">
+            <section class="panel">
+                <span class="module-head">Параметры выпуска</span>
+                <div class="grid">
+                    <label>Заголовок<input @bind="_title" @bind:after="RequestRender"
+                                           placeholder="290. ЛЕДОКОЛ XIX" /></label>
+                    <label>Подзаголовок<input @bind="_subtitle" @bind:after="RequestRender"
+                                              placeholder="КОРОЛЬ МАШИННОГО ЗАЛА" /></label>
+                    <label>Третья строка<input @bind="_tagline" @bind:after="RequestRender"
+                                               placeholder="ник / дата / тег (необязательно)" /></label>
+                    <div class="row">
+                        <label class="sm">Seed<input type="number" @bind="_seed" @bind:after="RequestRender" /></label>
+                        <label class="sm">Ширина<input type="number" min="320" max="3840" @bind="_width"
+                                                       @bind:after="OnDimsChanged" /></label>
+                        <label class="sm">Высота<input type="number" min="180" max="2160" @bind="_height"
+                                                       @bind:after="OnDimsChanged" /></label>
+                    </div>
+                    <div class="row">
+                        <label class="sm">Задержка отрисовки, мс<input type="number" @bind="_renderDebounceMs" min="0"
+                                                                       max="3000" step="10" /></label>
+                        <button type="button" class="toggle @(_transparent ? "on" : null)" @onclick="ToggleTransparent"
+                                title="Прозрачный фон вместо подложки-градиента">
+                            <Icon Name="@(_transparent ? "square-check" : "square")" />
+                            Фон
+                        </button>
+                    </div>
+                </div>
+            </section>
+
+            <details class="adv">
+                <summary>Расширенная калибровка стиля</summary>
+                <div class="adv-body">
+
+                    <details class="sec">
+                        <summary>Палитра</summary>
+                        <ColorRow Label="Грань зелёного — верх" Value="@_style.Palette.GreenFaceTop"
+                                  ValueChanged="v => P(p => p with { GreenFaceTop = v })" />
+                        <ColorRow Label="Грань зелёного — середина" Value="@_style.Palette.GreenFaceMid"
+                                  ValueChanged="v => P(p => p with { GreenFaceMid = v })" />
+                        <ColorRow Label="Грань зелёного — низ" Value="@_style.Palette.GreenFaceBottom"
+                                  ValueChanged="v => P(p => p with { GreenFaceBottom = v })" />
+                        <ColorRow Label="Экструзия зелёного" Value="@_style.Palette.GreenExtrude"
+                                  ValueChanged="v => P(p => p with { GreenExtrude = v })" />
+                        <ColorRow Label="Грань белого — верх" Value="@_style.Palette.WhiteFaceTop"
+                                  ValueChanged="v => P(p => p with { WhiteFaceTop = v })" />
+                        <ColorRow Label="Грань белого — середина" Value="@_style.Palette.WhiteFaceMid"
+                                  ValueChanged="v => P(p => p with { WhiteFaceMid = v })" />
+                        <ColorRow Label="Грань белого — низ" Value="@_style.Palette.WhiteFaceBottom"
+                                  ValueChanged="v => P(p => p with { WhiteFaceBottom = v })" />
+                        <ColorRow Label="Экструзия белого" Value="@_style.Palette.WhiteExtrude"
+                                  ValueChanged="v => P(p => p with { WhiteExtrude = v })" />
+                        <ColorRow Label="Полоса — верх" Value="@_style.Palette.BandTop"
+                                  ValueChanged="v => P(p => p with { BandTop = v })" />
+                        <ColorRow Label="Полоса — низ" Value="@_style.Palette.BandBottom"
+                                  ValueChanged="v => P(p => p with { BandBottom = v })" />
+                        <ColorRow Label="Подмазка под номером" Value="@_style.Palette.Smear"
+                                  ValueChanged="v => P(p => p with { Smear = v })" />
+                        <ColorRow Label="Плашка" Value="@_style.Palette.Plate"
+                                  ValueChanged="v => P(p => p with { Plate = v })" />
+                        <ColorRow Label="Текст подзаголовка" Value="@_style.Palette.SubtitleText"
+                                  ValueChanged="v => P(p => p with { SubtitleText = v })" />
+                        <ColorRow Label="Обводка заголовка" Value="@_style.Palette.TitleStroke"
+                                  ValueChanged="v => P(p => p with { TitleStroke = v })" />
+                        <ColorRow Label="Чипсы" Value="@_style.Palette.Chips"
+                                  ValueChanged="v => P(p => p with { Chips = v })" />
+                        <ColorRow Label="Тёмные брызги" Value="@_style.Palette.DarkSplatter"
+                                  ValueChanged="v => P(p => p with { DarkSplatter = v })" />
+                    </details>
+
+                    <details class="sec">
+                        <summary>Раскладка</summary>
+                        <RangeRow Label="Кегль заголовка" Min="0" Max="0.2f" Step="0.001f"
+                                  Value="@_style.Layout.TitleSizeFraction"
+                                  ValueChanged="v => L(s => s with { TitleSizeFraction = v })" />
+                        <RangeRow Label="Макс. ширина заголовка" Min="0.2f" Max="1" Step="0.01f"
+                                  Value="@_style.Layout.MaxTitleWidthFraction"
+                                  ValueChanged="v => L(s => s with { MaxTitleWidthFraction = v })" />
+                        <RangeRow Label="Конденс заголовка" Min="0.5f" Max="1.5f" Step="0.01f"
+                                  Value="@_style.Layout.TitleScaleX"
+                                  ValueChanged="v => L(s => s with { TitleScaleX = v })" />
+                        <RangeRow Label="Базовая линия заголовка" Min="0" Max="1" Step="0.005f"
+                                  Value="@_style.Layout.TitleBaselineFraction"
+                                  ValueChanged="v => L(s => s with { TitleBaselineFraction = v })" />
+                        <RangeRow Label="Кегль подзаголовка" Min="0.1f" Max="1" Step="0.01f"
+                                  Value="@_style.Layout.SubtitleSizeFactor"
+                                  ValueChanged="v => L(s => s with { SubtitleSizeFactor = v })" />
+                        <RangeRow Label="Конденс подзаголовка" Min="0.5f" Max="1.5f" Step="0.01f"
+                                  Value="@_style.Layout.SubtitleScaleX"
+                                  ValueChanged="v => L(s => s with { SubtitleScaleX = v })" />
+                        <RangeRow Label="Смещение подзаголовка" Min="0" Max="2" Step="0.01f"
+                                  Value="@_style.Layout.SubtitleBaselineOffsetFactor"
+                                  ValueChanged="v => L(s => s with { SubtitleBaselineOffsetFactor = v })" />
+                        <RangeRow Label="Наклон блока, °" Min="-15" Max="15" Step="0.1f"
+                                  Value="@_style.Layout.RotationDegrees"
+                                  ValueChanged="v => L(s => s with { RotationDegrees = v })" />
+                        <RangeRow Label="Боковые поля плашки" Min="0" Max="1.5f" Step="0.01f"
+                                  Value="@_style.Layout.PlateSidePaddingFactor"
+                                  ValueChanged="v => L(s => s with { PlateSidePaddingFactor = v })" />
+                        <RangeRow Label="Верхнее поле плашки" Min="0" Max="1" Step="0.01f"
+                                  Value="@_style.Layout.PlateTopPaddingFactor"
+                                  ValueChanged="v => L(s => s with { PlateTopPaddingFactor = v })" />
+                        <RangeRow Label="Низ плашки" Min="0" Max="2" Step="0.01f"
+                                  Value="@_style.Layout.PlateBottomFactor"
+                                  ValueChanged="v => L(s => s with { PlateBottomFactor = v })" />
+                        <RangeRow Label="Высота полосы" Min="0" Max="3" Step="0.01f"
+                                  Value="@_style.Layout.BandHeightFactor"
+                                  ValueChanged="v => L(s => s with { BandHeightFactor = v })" />
+                        <RangeRow Label="Левое поле полосы" Min="0" Max="3" Step="0.01f"
+                                  Value="@_style.Layout.BandLeftPaddingFactor"
+                                  ValueChanged="v => L(s => s with { BandLeftPaddingFactor = v })" />
+                        <RangeRow Label="Правое поле полосы" Min="0" Max="3" Step="0.01f"
+                                  Value="@_style.Layout.BandRightPaddingFactor"
+                                  ValueChanged="v => L(s => s with { BandRightPaddingFactor = v })" />
+                    </details>
+
+                    <details class="sec">
+                        <summary>3D-текст</summary>
+                        <RangeRow Label="Глубина экструзии" Min="0" Max="0.3f" Step="0.005f"
+                                  Value="@_style.TitleFx.ExtrudeDepthFactor"
+                                  ValueChanged="v => T(s => s with { ExtrudeDepthFactor = v })" />
+                        <RangeRow Label="Наклон экструзии" Min="-2" Max="2" Step="0.05f"
+                                  Value="@_style.TitleFx.ExtrudeStepX"
+                                  ValueChanged="v => T(s => s with { ExtrudeStepX = v })" />
+                        <RangeRow Label="Толщина обводки" Min="0" Max="0.1f" Step="0.001f"
+                                  Value="@_style.TitleFx.StrokeWidthFactor"
+                                  ValueChanged="v => T(s => s with { StrokeWidthFactor = v })" />
+                        <RangeRow Label="Средняя точка градиента" Min="0" Max="1" Step="0.01f"
+                                  Value="@_style.TitleFx.FaceGradientMidStop"
+                                  ValueChanged="v => T(s => s with { FaceGradientMidStop = v })" />
+                        <ColorRow Label="Зерно белых букв" Value="@_style.TitleFx.MainMottleColor"
+                                  ValueChanged="v => T(s => s with { MainMottleColor = v })" />
+                        <ColorRow Label="Зерно зелёного номера" Value="@_style.TitleFx.PrefixMottleColor"
+                                  ValueChanged="v => T(s => s with { PrefixMottleColor = v })" />
+                        <RangeRow Label="Плотность зерна" Min="0" Max="3" Step="0.05f"
+                                  Value="@_style.TitleFx.MottleDensity"
+                                  ValueChanged="v => T(s => s with { MottleDensity = v })" />
+                        <RangeRow Label="Размер зерна" Min="0" Max="0.5f" Step="0.005f"
+                                  Value="@_style.TitleFx.MottleMaxRadiusFactor"
+                                  ValueChanged="v => T(s => s with { MottleMaxRadiusFactor = v })" />
+                        <RangeRow Label="Плотность выгрызов" Min="0" Max="3" Step="0.05f"
+                                  Value="@_style.TitleFx.DistressDensity"
+                                  ValueChanged="v => T(s => s with { DistressDensity = v })" />
+                    </details>
+
+                    <details class="sec">
+                        <summary>Плашка</summary>
+                        <RangeRow Label="Рваность краёв" Min="0" Max="0.3f" Step="0.005f"
+                                  Value="@_style.Plate.EdgeAmpFactor"
+                                  ValueChanged="v => Pl(s => s with { EdgeAmpFactor = v })" />
+                        <RangeRow Label="Рваность торцов" Min="0" Max="0.5f" Step="0.005f"
+                                  Value="@_style.Plate.EndAmpFactor"
+                                  ValueChanged="v => Pl(s => s with { EndAmpFactor = v })" />
+                        <RangeRow Label="Зубья слева" Min="0" Max="1" Step="0.01f" Value="@_style.Plate.TeethLeftFactor"
+                                  ValueChanged="v => Pl(s => s with { TeethLeftFactor = v })" />
+                        <RangeRow Label="Зубья справа" Min="0" Max="1" Step="0.01f"
+                                  Value="@_style.Plate.TeethRightFactor"
+                                  ValueChanged="v => Pl(s => s with { TeethRightFactor = v })" />
+                        <ColorRow Label="Неравномерность краски" Value="@_style.Plate.MottleColor"
+                                  ValueChanged="v => Pl(s => s with { MottleColor = v })" />
+                        <RangeRow Label="Кол-во пятен" Min="0" Max="40" Step="1" Value="@_style.Plate.MottleCount"
+                                  ValueChanged="v => Pl(s => s with { MottleCount = (int)MathF.Round(v) })" />
+                        <RangeRow Label="Размер пятен" Min="0" Max="1.5f" Step="0.01f"
+                                  Value="@_style.Plate.MottleMaxRadiusFactor"
+                                  ValueChanged="v => Pl(s => s with { MottleMaxRadiusFactor = v })" />
+                        <RangeRow Label="Плотность выгрызов" Min="0" Max="3" Step="0.05f"
+                                  Value="@_style.Plate.DistressDensity"
+                                  ValueChanged="v => Pl(s => s with { DistressDensity = v })" />
+                        <RangeRow Label="Тень — смещение Y" Min="0" Max="30" Step="1"
+                                  Value="@_style.Plate.ShadowOffsetY"
+                                  ValueChanged="v => Pl(s => s with { ShadowOffsetY = v })" />
+                        <RangeRow Label="Тень — блюр" Min="0" Max="30" Step="1" Value="@_style.Plate.ShadowBlur"
+                                  ValueChanged="v => Pl(s => s with { ShadowBlur = v })" />
+                        <RangeRow Label="Тень — альфа" Min="0" Max="255" Step="1" Value="@_style.Plate.ShadowAlpha"
+                                  ValueChanged="v => Pl(s => s with { ShadowAlpha = (int)MathF.Round(v) })" />
+                    </details>
+
+                    <details class="sec">
+                        <summary>Подмазка под номером</summary>
+                        <label class="prow"><span class="pname">Включена</span><input type="checkbox"
+                                                                                      checked="@_style.Smear.Enabled"
+                                                                                      @onchange="e => Sm(s => s with { Enabled = (bool)e.Value! })" /></label>
+                        <RangeRow Label="Вынос влево" Min="0" Max="2" Step="0.01f"
+                                  Value="@_style.Smear.LeftExtendFactor"
+                                  ValueChanged="v => Sm(s => s with { LeftExtendFactor = v })" />
+                        <RangeRow Label="Вынос вверх" Min="0" Max="1" Step="0.01f" Value="@_style.Smear.TopExtendFactor"
+                                  ValueChanged="v => Sm(s => s with { TopExtendFactor = v })" />
+                        <RangeRow Label="Запас справа" Min="0" Max="1" Step="0.01f" Value="@_style.Smear.RightPadFactor"
+                                  ValueChanged="v => Sm(s => s with { RightPadFactor = v })" />
+                        <RangeRow Label="Низ ниже базовой линии" Min="0" Max="1" Step="0.01f"
+                                  Value="@_style.Smear.BaselineDropFactor"
+                                  ValueChanged="v => Sm(s => s with { BaselineDropFactor = v })" />
+                        <RangeRow Label="Рваность краёв" Min="0" Max="0.5f" Step="0.005f"
+                                  Value="@_style.Smear.EdgeAmpFactor"
+                                  ValueChanged="v => Sm(s => s with { EdgeAmpFactor = v })" />
+                        <RangeRow Label="Рваность торцов" Min="0" Max="0.5f" Step="0.005f"
+                                  Value="@_style.Smear.EndAmpFactor"
+                                  ValueChanged="v => Sm(s => s with { EndAmpFactor = v })" />
+                        <RangeRow Label="Зубья" Min="0" Max="1.5f" Step="0.01f" Value="@_style.Smear.TeethFactor"
+                                  ValueChanged="v => Sm(s => s with { TeethFactor = v })" />
+                        <ColorRow Label="Тёмное зерно" Value="@_style.Smear.MottleColor"
+                                  ValueChanged="v => Sm(s => s with { MottleColor = v })" />
+                        <RangeRow Label="Плотность зерна" Min="0" Max="3" Step="0.05f"
+                                  Value="@_style.Smear.MottleDensity"
+                                  ValueChanged="v => Sm(s => s with { MottleDensity = v })" />
+                        <RangeRow Label="Размер зерна" Min="0" Max="0.3f" Step="0.005f"
+                                  Value="@_style.Smear.MottleMaxRadiusFactor"
+                                  ValueChanged="v => Sm(s => s with { MottleMaxRadiusFactor = v })" />
+                        <RangeRow Label="Плотность выгрызов" Min="0" Max="5" Step="0.05f"
+                                  Value="@_style.Smear.DistressDensity"
+                                  ValueChanged="v => Sm(s => s with { DistressDensity = v })" />
+                    </details>
+
+                    <details class="sec">
+                        <summary>Полоса</summary>
+                        <RangeRow Label="Рваность краёв" Min="0" Max="0.3f" Step="0.005f"
+                                  Value="@_style.Band.EdgeAmpFactor"
+                                  ValueChanged="v => B(s => s with { EdgeAmpFactor = v })" />
+                        <RangeRow Label="Рваность торцов" Min="0" Max="0.5f" Step="0.005f"
+                                  Value="@_style.Band.EndAmpFactor"
+                                  ValueChanged="v => B(s => s with { EndAmpFactor = v })" />
+                        <RangeRow Label="Зубья слева" Min="0" Max="2" Step="0.01f" Value="@_style.Band.TeethLeftFactor"
+                                  ValueChanged="v => B(s => s with { TeethLeftFactor = v })" />
+                        <RangeRow Label="Зубья справа" Min="0" Max="3" Step="0.01f"
+                                  Value="@_style.Band.TeethRightFactor"
+                                  ValueChanged="v => B(s => s with { TeethRightFactor = v })" />
+                        <ColorRow Label="Зерно полосы" Value="@_style.Band.MottleColor"
+                                  ValueChanged="v => B(s => s with { MottleColor = v })" />
+                        <RangeRow Label="Плотность зерна" Min="0" Max="3" Step="0.05f"
+                                  Value="@_style.Band.MottleDensity"
+                                  ValueChanged="v => B(s => s with { MottleDensity = v })" />
+                        <RangeRow Label="Размер зерна" Min="0" Max="1" Step="0.01f"
+                                  Value="@_style.Band.MottleMaxRadiusFactor"
+                                  ValueChanged="v => B(s => s with { MottleMaxRadiusFactor = v })" />
+                        <RangeRow Label="Плотность выгрызов" Min="0" Max="3" Step="0.05f"
+                                  Value="@_style.Band.DistressDensity"
+                                  ValueChanged="v => B(s => s with { DistressDensity = v })" />
+                        <RangeRow Label="Потёртость подзаголовка" Min="0" Max="3" Step="0.05f"
+                                  Value="@_style.Band.SubtitleDistressDensity"
+                                  ValueChanged="v => B(s => s with { SubtitleDistressDensity = v })" />
+                    </details>
+
+                    <details class="sec">
+                        <summary>Акценты</summary>
+                        <RangeRow Label="Чипсы слева" Min="0" Max="30" Step="1" Value="@_style.Accents.ChipsLeftCount"
+                                  ValueChanged="v => Ac(s => s with { ChipsLeftCount = (int)MathF.Round(v) })" />
+                        <RangeRow Label="Чипсы справа" Min="0" Max="30" Step="1" Value="@_style.Accents.ChipsRightCount"
+                                  ValueChanged="v => Ac(s => s with { ChipsRightCount = (int)MathF.Round(v) })" />
+                        <RangeRow Label="Разброс чипсов" Min="0" Max="60" Step="1" Value="@_style.Accents.ChipsSpread"
+                                  ValueChanged="v => Ac(s => s with { ChipsSpread = v })" />
+                        <RangeRow Label="Зелёная крошка" Min="0" Max="60" Step="1"
+                                  Value="@_style.Accents.SplatterGreenCount"
+                                  ValueChanged="v => Ac(s => s with { SplatterGreenCount = (int)MathF.Round(v) })" />
+                        <RangeRow Label="Тёмные брызги" Min="0" Max="60" Step="1"
+                                  Value="@_style.Accents.SplatterDarkCount"
+                                  ValueChanged="v => Ac(s => s with { SplatterDarkCount = (int)MathF.Round(v) })" />
+                    </details>
+
+                    <details class="sec">
+                        <summary>Третья строка</summary>
+                        <label class="prow"><span class="pname">Включена</span><input type="checkbox"
+                                                                                      checked="@_style.Tagline.Enabled"
+                                                                                      @onchange="e => Tg(s => s with { Enabled = (bool)e.Value! })" /></label>
+                        <RangeRow Label="Кегль" Min="0.1f" Max="1" Step="0.01f" Value="@_style.Tagline.SizeFactor"
+                                  ValueChanged="v => Tg(s => s with { SizeFactor = v })" />
+                        <ColorRow Label="Цвет" Value="@_style.Tagline.Color"
+                                  ValueChanged="v => Tg(s => s with { Color = v })" />
+                        <RangeRow Label="Отступ от подзаголовка" Min="0" Max="1" Step="0.01f"
+                                  Value="@_style.Tagline.BaselineGapFactor"
+                                  ValueChanged="v => Tg(s => s with { BaselineGapFactor = v })" />
+                        <RangeRow Label="Конденс" Min="0.5f" Max="1.5f" Step="0.01f" Value="@_style.Tagline.ScaleX"
+                                  ValueChanged="v => Tg(s => s with { ScaleX = v })" />
+                        <RangeRow Label="Потёртость" Min="0" Max="3" Step="0.05f"
+                                  Value="@_style.Tagline.DistressDensity"
+                                  ValueChanged="v => Tg(s => s with { DistressDensity = v })" />
+                    </details>
+                </div>
+            </details>
+        </div>
     </div>
-
-    <section class="toolbar">
-        <span class="module-head">Действия</span>
-        <div class="actions">
-            <button @onclick="Render" disabled="@(_typeface is null)"
-                    title="Перерисовать баннер с текущими параметрами">
-                <Icon Name="play" />
-                Сгенерировать
-            </button>
-            <button class="btn-ghost" @onclick="Randomize" disabled="@(_typeface is null)"
-                    title="Новый случайный seed – меняет рисунок потёртостей и брызг">
-                <Icon Name="dices" />
-                Случайный вид
-            </button>
-            <button class="btn-danger" @onclick="ResetStyle" disabled="@(_typeface is null)"
-                    title="Вернуть все настройки стиля к значениям по умолчанию">
-                <Icon Name="rotate-ccw" />
-                Сбросить стиль
-            </button>
-            @if (_imgSrc is not null)
-            {
-                <a class="btn btn-ghost" download="banner.png" href="@_imgSrc"
-                   title="Скачать готовый баннер картинкой PNG">
-                    <Icon Name="download" />
-                    Скачать PNG</a>
-            }
-            @if (_exportHref is not null)
-            {
-                <a class="btn btn-ghost" download="banner-style.json" href="@_exportHref"
-                   title="Сохранить текущие настройки стиля в файл JSON">
-                    <Icon Name="save" />
-                    Сохранить стиль</a>
-            }
-            <label class="btn btn-ghost" title="Загрузить настройки стиля из ранее сохранённого файла JSON">
-                <Icon Name="upload" />
-                Загрузить стиль
-                <InputFile OnChange="ImportStyle" accept=".json,application/json" class="visually-hidden-file" />
-            </label>
-        </div>
-    </section>
-
-    <details class="adv">
-        <summary>Расширенная калибровка стиля</summary>
-        <div class="adv-body">
-
-            <details class="sec">
-                <summary>Палитра</summary>
-                <ColorRow Label="Грань зелёного — верх" Value="@_style.Palette.GreenFaceTop"
-                          ValueChanged="v => P(p => p with { GreenFaceTop = v })" />
-                <ColorRow Label="Грань зелёного — середина" Value="@_style.Palette.GreenFaceMid"
-                          ValueChanged="v => P(p => p with { GreenFaceMid = v })" />
-                <ColorRow Label="Грань зелёного — низ" Value="@_style.Palette.GreenFaceBottom"
-                          ValueChanged="v => P(p => p with { GreenFaceBottom = v })" />
-                <ColorRow Label="Экструзия зелёного" Value="@_style.Palette.GreenExtrude"
-                          ValueChanged="v => P(p => p with { GreenExtrude = v })" />
-                <ColorRow Label="Грань белого — верх" Value="@_style.Palette.WhiteFaceTop"
-                          ValueChanged="v => P(p => p with { WhiteFaceTop = v })" />
-                <ColorRow Label="Грань белого — середина" Value="@_style.Palette.WhiteFaceMid"
-                          ValueChanged="v => P(p => p with { WhiteFaceMid = v })" />
-                <ColorRow Label="Грань белого — низ" Value="@_style.Palette.WhiteFaceBottom"
-                          ValueChanged="v => P(p => p with { WhiteFaceBottom = v })" />
-                <ColorRow Label="Экструзия белого" Value="@_style.Palette.WhiteExtrude"
-                          ValueChanged="v => P(p => p with { WhiteExtrude = v })" />
-                <ColorRow Label="Полоса — верх" Value="@_style.Palette.BandTop"
-                          ValueChanged="v => P(p => p with { BandTop = v })" />
-                <ColorRow Label="Полоса — низ" Value="@_style.Palette.BandBottom"
-                          ValueChanged="v => P(p => p with { BandBottom = v })" />
-                <ColorRow Label="Подмазка под номером" Value="@_style.Palette.Smear"
-                          ValueChanged="v => P(p => p with { Smear = v })" />
-                <ColorRow Label="Плашка" Value="@_style.Palette.Plate"
-                          ValueChanged="v => P(p => p with { Plate = v })" />
-                <ColorRow Label="Текст подзаголовка" Value="@_style.Palette.SubtitleText"
-                          ValueChanged="v => P(p => p with { SubtitleText = v })" />
-                <ColorRow Label="Обводка заголовка" Value="@_style.Palette.TitleStroke"
-                          ValueChanged="v => P(p => p with { TitleStroke = v })" />
-                <ColorRow Label="Чипсы" Value="@_style.Palette.Chips"
-                          ValueChanged="v => P(p => p with { Chips = v })" />
-                <ColorRow Label="Тёмные брызги" Value="@_style.Palette.DarkSplatter"
-                          ValueChanged="v => P(p => p with { DarkSplatter = v })" />
-            </details>
-
-            <details class="sec">
-                <summary>Раскладка</summary>
-                <RangeRow Label="Кегль заголовка" Min="0" Max="0.2f" Step="0.001f"
-                          Value="@_style.Layout.TitleSizeFraction"
-                          ValueChanged="v => L(s => s with { TitleSizeFraction = v })" />
-                <RangeRow Label="Макс. ширина заголовка" Min="0.2f" Max="1" Step="0.01f"
-                          Value="@_style.Layout.MaxTitleWidthFraction"
-                          ValueChanged="v => L(s => s with { MaxTitleWidthFraction = v })" />
-                <RangeRow Label="Конденс заголовка" Min="0.5f" Max="1.5f" Step="0.01f"
-                          Value="@_style.Layout.TitleScaleX" ValueChanged="v => L(s => s with { TitleScaleX = v })" />
-                <RangeRow Label="Базовая линия заголовка" Min="0" Max="1" Step="0.005f"
-                          Value="@_style.Layout.TitleBaselineFraction"
-                          ValueChanged="v => L(s => s with { TitleBaselineFraction = v })" />
-                <RangeRow Label="Кегль подзаголовка" Min="0.1f" Max="1" Step="0.01f"
-                          Value="@_style.Layout.SubtitleSizeFactor"
-                          ValueChanged="v => L(s => s with { SubtitleSizeFactor = v })" />
-                <RangeRow Label="Конденс подзаголовка" Min="0.5f" Max="1.5f" Step="0.01f"
-                          Value="@_style.Layout.SubtitleScaleX"
-                          ValueChanged="v => L(s => s with { SubtitleScaleX = v })" />
-                <RangeRow Label="Смещение подзаголовка" Min="0" Max="2" Step="0.01f"
-                          Value="@_style.Layout.SubtitleBaselineOffsetFactor"
-                          ValueChanged="v => L(s => s with { SubtitleBaselineOffsetFactor = v })" />
-                <RangeRow Label="Наклон блока, °" Min="-15" Max="15" Step="0.1f" Value="@_style.Layout.RotationDegrees"
-                          ValueChanged="v => L(s => s with { RotationDegrees = v })" />
-                <RangeRow Label="Боковые поля плашки" Min="0" Max="1.5f" Step="0.01f"
-                          Value="@_style.Layout.PlateSidePaddingFactor"
-                          ValueChanged="v => L(s => s with { PlateSidePaddingFactor = v })" />
-                <RangeRow Label="Верхнее поле плашки" Min="0" Max="1" Step="0.01f"
-                          Value="@_style.Layout.PlateTopPaddingFactor"
-                          ValueChanged="v => L(s => s with { PlateTopPaddingFactor = v })" />
-                <RangeRow Label="Низ плашки" Min="0" Max="2" Step="0.01f" Value="@_style.Layout.PlateBottomFactor"
-                          ValueChanged="v => L(s => s with { PlateBottomFactor = v })" />
-                <RangeRow Label="Высота полосы" Min="0" Max="3" Step="0.01f" Value="@_style.Layout.BandHeightFactor"
-                          ValueChanged="v => L(s => s with { BandHeightFactor = v })" />
-                <RangeRow Label="Левое поле полосы" Min="0" Max="3" Step="0.01f"
-                          Value="@_style.Layout.BandLeftPaddingFactor"
-                          ValueChanged="v => L(s => s with { BandLeftPaddingFactor = v })" />
-                <RangeRow Label="Правое поле полосы" Min="0" Max="3" Step="0.01f"
-                          Value="@_style.Layout.BandRightPaddingFactor"
-                          ValueChanged="v => L(s => s with { BandRightPaddingFactor = v })" />
-            </details>
-
-            <details class="sec">
-                <summary>3D-текст</summary>
-                <RangeRow Label="Глубина экструзии" Min="0" Max="0.3f" Step="0.005f"
-                          Value="@_style.TitleFx.ExtrudeDepthFactor"
-                          ValueChanged="v => T(s => s with { ExtrudeDepthFactor = v })" />
-                <RangeRow Label="Наклон экструзии" Min="-2" Max="2" Step="0.05f" Value="@_style.TitleFx.ExtrudeStepX"
-                          ValueChanged="v => T(s => s with { ExtrudeStepX = v })" />
-                <RangeRow Label="Толщина обводки" Min="0" Max="0.1f" Step="0.001f"
-                          Value="@_style.TitleFx.StrokeWidthFactor"
-                          ValueChanged="v => T(s => s with { StrokeWidthFactor = v })" />
-                <RangeRow Label="Средняя точка градиента" Min="0" Max="1" Step="0.01f"
-                          Value="@_style.TitleFx.FaceGradientMidStop"
-                          ValueChanged="v => T(s => s with { FaceGradientMidStop = v })" />
-                <ColorRow Label="Зерно белых букв" Value="@_style.TitleFx.MainMottleColor"
-                          ValueChanged="v => T(s => s with { MainMottleColor = v })" />
-                <ColorRow Label="Зерно зелёного номера" Value="@_style.TitleFx.PrefixMottleColor"
-                          ValueChanged="v => T(s => s with { PrefixMottleColor = v })" />
-                <RangeRow Label="Плотность зерна" Min="0" Max="3" Step="0.05f" Value="@_style.TitleFx.MottleDensity"
-                          ValueChanged="v => T(s => s with { MottleDensity = v })" />
-                <RangeRow Label="Размер зерна" Min="0" Max="0.5f" Step="0.005f"
-                          Value="@_style.TitleFx.MottleMaxRadiusFactor"
-                          ValueChanged="v => T(s => s with { MottleMaxRadiusFactor = v })" />
-                <RangeRow Label="Плотность выгрызов" Min="0" Max="3" Step="0.05f"
-                          Value="@_style.TitleFx.DistressDensity"
-                          ValueChanged="v => T(s => s with { DistressDensity = v })" />
-            </details>
-
-            <details class="sec">
-                <summary>Плашка</summary>
-                <RangeRow Label="Рваность краёв" Min="0" Max="0.3f" Step="0.005f" Value="@_style.Plate.EdgeAmpFactor"
-                          ValueChanged="v => Pl(s => s with { EdgeAmpFactor = v })" />
-                <RangeRow Label="Рваность торцов" Min="0" Max="0.5f" Step="0.005f" Value="@_style.Plate.EndAmpFactor"
-                          ValueChanged="v => Pl(s => s with { EndAmpFactor = v })" />
-                <RangeRow Label="Зубья слева" Min="0" Max="1" Step="0.01f" Value="@_style.Plate.TeethLeftFactor"
-                          ValueChanged="v => Pl(s => s with { TeethLeftFactor = v })" />
-                <RangeRow Label="Зубья справа" Min="0" Max="1" Step="0.01f" Value="@_style.Plate.TeethRightFactor"
-                          ValueChanged="v => Pl(s => s with { TeethRightFactor = v })" />
-                <ColorRow Label="Неравномерность краски" Value="@_style.Plate.MottleColor"
-                          ValueChanged="v => Pl(s => s with { MottleColor = v })" />
-                <RangeRow Label="Кол-во пятен" Min="0" Max="40" Step="1" Value="@_style.Plate.MottleCount"
-                          ValueChanged="v => Pl(s => s with { MottleCount = (int)MathF.Round(v) })" />
-                <RangeRow Label="Размер пятен" Min="0" Max="1.5f" Step="0.01f"
-                          Value="@_style.Plate.MottleMaxRadiusFactor"
-                          ValueChanged="v => Pl(s => s with { MottleMaxRadiusFactor = v })" />
-                <RangeRow Label="Плотность выгрызов" Min="0" Max="3" Step="0.05f" Value="@_style.Plate.DistressDensity"
-                          ValueChanged="v => Pl(s => s with { DistressDensity = v })" />
-                <RangeRow Label="Тень — смещение Y" Min="0" Max="30" Step="1" Value="@_style.Plate.ShadowOffsetY"
-                          ValueChanged="v => Pl(s => s with { ShadowOffsetY = v })" />
-                <RangeRow Label="Тень — блюр" Min="0" Max="30" Step="1" Value="@_style.Plate.ShadowBlur"
-                          ValueChanged="v => Pl(s => s with { ShadowBlur = v })" />
-                <RangeRow Label="Тень — альфа" Min="0" Max="255" Step="1" Value="@_style.Plate.ShadowAlpha"
-                          ValueChanged="v => Pl(s => s with { ShadowAlpha = (int)MathF.Round(v) })" />
-            </details>
-
-            <details class="sec">
-                <summary>Подмазка под номером</summary>
-                <label class="prow"><span class="pname">Включена</span><input type="checkbox"
-                                                                              checked="@_style.Smear.Enabled"
-                                                                              @onchange="e => Sm(s => s with { Enabled = (bool)e.Value! })" /></label>
-                <RangeRow Label="Вынос влево" Min="0" Max="2" Step="0.01f" Value="@_style.Smear.LeftExtendFactor"
-                          ValueChanged="v => Sm(s => s with { LeftExtendFactor = v })" />
-                <RangeRow Label="Вынос вверх" Min="0" Max="1" Step="0.01f" Value="@_style.Smear.TopExtendFactor"
-                          ValueChanged="v => Sm(s => s with { TopExtendFactor = v })" />
-                <RangeRow Label="Запас справа" Min="0" Max="1" Step="0.01f" Value="@_style.Smear.RightPadFactor"
-                          ValueChanged="v => Sm(s => s with { RightPadFactor = v })" />
-                <RangeRow Label="Низ ниже базовой линии" Min="0" Max="1" Step="0.01f"
-                          Value="@_style.Smear.BaselineDropFactor"
-                          ValueChanged="v => Sm(s => s with { BaselineDropFactor = v })" />
-                <RangeRow Label="Рваность краёв" Min="0" Max="0.5f" Step="0.005f" Value="@_style.Smear.EdgeAmpFactor"
-                          ValueChanged="v => Sm(s => s with { EdgeAmpFactor = v })" />
-                <RangeRow Label="Рваность торцов" Min="0" Max="0.5f" Step="0.005f" Value="@_style.Smear.EndAmpFactor"
-                          ValueChanged="v => Sm(s => s with { EndAmpFactor = v })" />
-                <RangeRow Label="Зубья" Min="0" Max="1.5f" Step="0.01f" Value="@_style.Smear.TeethFactor"
-                          ValueChanged="v => Sm(s => s with { TeethFactor = v })" />
-                <ColorRow Label="Тёмное зерно" Value="@_style.Smear.MottleColor"
-                          ValueChanged="v => Sm(s => s with { MottleColor = v })" />
-                <RangeRow Label="Плотность зерна" Min="0" Max="3" Step="0.05f" Value="@_style.Smear.MottleDensity"
-                          ValueChanged="v => Sm(s => s with { MottleDensity = v })" />
-                <RangeRow Label="Размер зерна" Min="0" Max="0.3f" Step="0.005f"
-                          Value="@_style.Smear.MottleMaxRadiusFactor"
-                          ValueChanged="v => Sm(s => s with { MottleMaxRadiusFactor = v })" />
-                <RangeRow Label="Плотность выгрызов" Min="0" Max="5" Step="0.05f" Value="@_style.Smear.DistressDensity"
-                          ValueChanged="v => Sm(s => s with { DistressDensity = v })" />
-            </details>
-
-            <details class="sec">
-                <summary>Полоса</summary>
-                <RangeRow Label="Рваность краёв" Min="0" Max="0.3f" Step="0.005f" Value="@_style.Band.EdgeAmpFactor"
-                          ValueChanged="v => B(s => s with { EdgeAmpFactor = v })" />
-                <RangeRow Label="Рваность торцов" Min="0" Max="0.5f" Step="0.005f" Value="@_style.Band.EndAmpFactor"
-                          ValueChanged="v => B(s => s with { EndAmpFactor = v })" />
-                <RangeRow Label="Зубья слева" Min="0" Max="2" Step="0.01f" Value="@_style.Band.TeethLeftFactor"
-                          ValueChanged="v => B(s => s with { TeethLeftFactor = v })" />
-                <RangeRow Label="Зубья справа" Min="0" Max="3" Step="0.01f" Value="@_style.Band.TeethRightFactor"
-                          ValueChanged="v => B(s => s with { TeethRightFactor = v })" />
-                <ColorRow Label="Зерно полосы" Value="@_style.Band.MottleColor"
-                          ValueChanged="v => B(s => s with { MottleColor = v })" />
-                <RangeRow Label="Плотность зерна" Min="0" Max="3" Step="0.05f" Value="@_style.Band.MottleDensity"
-                          ValueChanged="v => B(s => s with { MottleDensity = v })" />
-                <RangeRow Label="Размер зерна" Min="0" Max="1" Step="0.01f" Value="@_style.Band.MottleMaxRadiusFactor"
-                          ValueChanged="v => B(s => s with { MottleMaxRadiusFactor = v })" />
-                <RangeRow Label="Плотность выгрызов" Min="0" Max="3" Step="0.05f" Value="@_style.Band.DistressDensity"
-                          ValueChanged="v => B(s => s with { DistressDensity = v })" />
-                <RangeRow Label="Потёртость подзаголовка" Min="0" Max="3" Step="0.05f"
-                          Value="@_style.Band.SubtitleDistressDensity"
-                          ValueChanged="v => B(s => s with { SubtitleDistressDensity = v })" />
-            </details>
-
-            <details class="sec">
-                <summary>Акценты</summary>
-                <RangeRow Label="Чипсы слева" Min="0" Max="30" Step="1" Value="@_style.Accents.ChipsLeftCount"
-                          ValueChanged="v => Ac(s => s with { ChipsLeftCount = (int)MathF.Round(v) })" />
-                <RangeRow Label="Чипсы справа" Min="0" Max="30" Step="1" Value="@_style.Accents.ChipsRightCount"
-                          ValueChanged="v => Ac(s => s with { ChipsRightCount = (int)MathF.Round(v) })" />
-                <RangeRow Label="Разброс чипсов" Min="0" Max="60" Step="1" Value="@_style.Accents.ChipsSpread"
-                          ValueChanged="v => Ac(s => s with { ChipsSpread = v })" />
-                <RangeRow Label="Зелёная крошка" Min="0" Max="60" Step="1" Value="@_style.Accents.SplatterGreenCount"
-                          ValueChanged="v => Ac(s => s with { SplatterGreenCount = (int)MathF.Round(v) })" />
-                <RangeRow Label="Тёмные брызги" Min="0" Max="60" Step="1" Value="@_style.Accents.SplatterDarkCount"
-                          ValueChanged="v => Ac(s => s with { SplatterDarkCount = (int)MathF.Round(v) })" />
-            </details>
-
-            <details class="sec">
-                <summary>Третья строка</summary>
-                <label class="prow"><span class="pname">Включена</span><input type="checkbox"
-                                                                              checked="@_style.Tagline.Enabled"
-                                                                              @onchange="e => Tg(s => s with { Enabled = (bool)e.Value! })" /></label>
-                <RangeRow Label="Кегль" Min="0.1f" Max="1" Step="0.01f" Value="@_style.Tagline.SizeFactor"
-                          ValueChanged="v => Tg(s => s with { SizeFactor = v })" />
-                <ColorRow Label="Цвет" Value="@_style.Tagline.Color"
-                          ValueChanged="v => Tg(s => s with { Color = v })" />
-                <RangeRow Label="Отступ от подзаголовка" Min="0" Max="1" Step="0.01f"
-                          Value="@_style.Tagline.BaselineGapFactor"
-                          ValueChanged="v => Tg(s => s with { BaselineGapFactor = v })" />
-                <RangeRow Label="Конденс" Min="0.5f" Max="1.5f" Step="0.01f" Value="@_style.Tagline.ScaleX"
-                          ValueChanged="v => Tg(s => s with { ScaleX = v })" />
-                <RangeRow Label="Потёртость" Min="0" Max="3" Step="0.05f" Value="@_style.Tagline.DistressDensity"
-                          ValueChanged="v => Tg(s => s with { DistressDensity = v })" />
-            </details>
-        </div>
-    </details>
 </div>
 
 @code {
