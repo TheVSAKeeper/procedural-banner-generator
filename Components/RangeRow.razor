@@ -1,11 +1,11 @@
 @using System.Globalization
-<label class="prow">
+<div class="prow">
     <span class="pname">@Label</span>
     <input type="range" min="@Fmt(Min)" max="@Fmt(Max)" step="@Fmt(Step)"
-           value="@Fmt(Value)" @oninput="OnInput" />
+           value="@Fmt(Value)" @oninput="OnInput" aria-label="@Label" />
     <input class="pnum" type="number" min="@Fmt(Min)" max="@Fmt(Max)" step="@Fmt(Step)"
-           value="@Fmt(Value)" @oninput="OnInput" />
-</label>
+           value="@Fmt(Value)" @oninput="OnInput" aria-label="@Label" />
+</div>
 
 @code {
     [Parameter] [EditorRequired] public string Label { get; set; } = "";

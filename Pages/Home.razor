@@ -4,7 +4,7 @@
 @inject HttpClient Http
 @inject IJSRuntime JS
 
-<PageTitle>Генератор баннеров</PageTitle>
+<PageTitle>Процедурный генератор баннеров</PageTitle>
 
 <div class="console">
     <div class="masthead">
@@ -74,30 +74,6 @@
                         <InputFile OnChange="ImportStyle" accept=".json,application/json"
                                    class="visually-hidden-file" />
                     </label>
-                    <label class="btn btn-ghost" title="Своя картинка-фон вместо подложки-градиента">
-                        <Icon Name="image" />
-                        @(_background is null ? "Фон картинкой" : "Сменить фон")
-                        <InputFile OnChange="UploadBackground" accept="image/*" class="visually-hidden-file" />
-                    </label>
-                    @if (_background is not null)
-                    {
-                        <button class="btn-danger" @onclick="ClearBackground" title="Убрать картинку-фон">
-                            <Icon Name="x" />
-                            Убрать фон
-                        </button>
-                    }
-                    <label class="btn btn-ghost" title="Лого/водяной знак картинкой в углу кадра">
-                        <Icon Name="image" />
-                        @(_logo is null ? "Лого картинкой" : "Сменить лого")
-                        <InputFile OnChange="UploadLogo" accept="image/*" class="visually-hidden-file" />
-                    </label>
-                    @if (_logo is not null)
-                    {
-                        <button class="btn-danger" @onclick="ClearLogo" title="Убрать лого">
-                            <Icon Name="x" />
-                            Убрать лого
-                        </button>
-                    }
                 </div>
             </section>
         </div>
@@ -380,7 +356,21 @@
 
                     <details class="sec">
                         <summary>Фон-картинка</summary>
-                        <p class="hint">Действует, когда загружена своя картинка-фон («Фон картинкой»).</p>
+                        <p class="hint">Загрузите свою картинку – она заменит подложку-градиент. Ручки ниже действуют только при загруженном фоне.</p>
+                        <div class="row">
+                            <label class="btn btn-ghost" title="Своя картинка-фон вместо подложки-градиента">
+                                <Icon Name="image" />
+                                @(_background is null ? "Фон картинкой" : "Сменить фон")
+                                <InputFile OnChange="UploadBackground" accept="image/*" class="visually-hidden-file" />
+                            </label>
+                            @if (_background is not null)
+                            {
+                                <button class="btn-danger" @onclick="ClearBackground" title="Убрать картинку-фон">
+                                    <Icon Name="x" />
+                                    Убрать фон
+                                </button>
+                            }
+                        </div>
                         <RangeRow Label="Затемнение фона" Min="0" Max="1" Step="0.01f"
                                   Value="@_style.Background.DarkenAlpha"
                                   ValueChanged="v => Bg(s => s with { DarkenAlpha = v })" />
@@ -391,7 +381,21 @@
 
                     <details class="sec">
                         <summary>Лого</summary>
-                        <p class="hint">Рисуется, когда загружено лого («Лого картинкой») и включён переключатель ниже.</p>
+                        <p class="hint">Загрузите картинку лого/водяного знака – она рисуется в углу при включённом переключателе.</p>
+                        <div class="row">
+                            <label class="btn btn-ghost" title="Лого/водяной знак картинкой в углу кадра">
+                                <Icon Name="image" />
+                                @(_logo is null ? "Лого картинкой" : "Сменить лого")
+                                <InputFile OnChange="UploadLogo" accept="image/*" class="visually-hidden-file" />
+                            </label>
+                            @if (_logo is not null)
+                            {
+                                <button class="btn-danger" @onclick="ClearLogo" title="Убрать лого">
+                                    <Icon Name="x" />
+                                    Убрать лого
+                                </button>
+                            }
+                        </div>
                         <label class="prow"><span class="pname">Включено</span><input type="checkbox"
                                                                                       checked="@_style.Logo.Enabled"
                                                                                       @onchange="e => Lg(s => s with { Enabled = (bool)e.Value! })" /></label>
@@ -488,6 +492,7 @@
     private async void RequestRender()
     {
         _renderDebounce?.Cancel();
+        _renderDebounce?.Dispose();
         var cts = new CancellationTokenSource();
         _renderDebounce = cts;
 

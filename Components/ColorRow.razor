@@ -1,9 +1,10 @@
-<label class="prow crow">
+<div class="prow crow">
     <span class="pname">@Label</span>
-    <input type="color" value="@Rgb" @oninput="OnColor" />
-    <input type="range" min="0" max="255" step="1" value="@Alpha" @oninput="OnAlpha" title="alpha" />
+    <input type="color" value="@Rgb" @oninput="OnColor" aria-label="@Label" />
+    <input type="range" min="0" max="255" step="1" value="@Alpha" @oninput="OnAlpha"
+           aria-label="@($"{Label}: прозрачность")" />
     <span class="phex">@Value</span>
-</label>
+</div>
 
 @code {
     [Parameter] [EditorRequired] public string Label { get; set; } = "";
