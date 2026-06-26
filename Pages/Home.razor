@@ -3,6 +3,7 @@
 @using System.Text.Json
 @inject HttpClient Http
 @inject IJSRuntime JS
+@inject Microsoft.AspNetCore.Components.NavigationManager Nav
 
 <PageTitle>Процедурный генератор баннеров</PageTitle>
 
@@ -498,7 +499,56 @@
         try { _inTelegram = await JS.InvokeAsync<bool>("tgWebApp.available"); }
         catch { _inTelegram = false; }
         await LoadStateAsync();
+        await TryImportFromLink();
         Render();
+    }
+
+    // Стиль из ссылки Mini App (бот кладёт его в ?s= при /banneredit) — в отдельный профиль «Из Telegram»,
+    // чтобы не перезатереть текущий. Профиль переиспользуется (идемпотентно на перезагрузках).
+    private async Task TryImportFromLink()
+    {
+        var packed = GetQueryParam(Nav.Uri, "s");
+        if (string.IsNullOrEmpty(packed))
+            return;
+
+        try
+        {
+            var style = BannerCore.BannerLink.UnpackStyle(packed);
+            const string name = "Из Telegram";
+            var slot = _profiles.FirstOrDefault(p => p.Name == name)
+                       ?? AddProfile(name);
+            slot.State = CaptureState() with { Style = style };
+            _activeId = slot.Id;
+            ApplyState(slot.State);
+            await SaveStateAsync();
+        }
+        catch (Exception ex)
+        {
+            _error = "Не удалось загрузить стиль из Telegram: " + ex.Message;
+        }
+    }
+
+    private ProfileEntry AddProfile(string name)
+    {
+        var entry = new ProfileEntry { Id = NewId(), Name = name };
+        _profiles.Add(entry);
+        return entry;
+    }
+
+    private static string? GetQueryParam(string uri, string key)
+    {
+        var query = new Uri(uri).Query;
+        if (query.Length <= 1)
+            return null;
+
+        foreach (var pair in query[1..].Split('&'))
+        {
+            var eq = pair.IndexOf('=');
+            if (eq > 0 && Uri.UnescapeDataString(pair[..eq]) == key)
+                return Uri.UnescapeDataString(pair[(eq + 1)..]);
+        }
+
+        return null;
     }
 
     private async Task Randomize()
