@@ -55,6 +55,15 @@
             </svg>
         </span>
     </div>
+    <script src="https://telegram.org/js/telegram-web-app.js"></script>
+    <script>
+        // Мост к Telegram Mini App: available() — открыты ли внутри Telegram; send() — отдать данные боту и закрыть.
+        window.tgWebApp = {
+            available: function () { return !!(window.Telegram && window.Telegram.WebApp && window.Telegram.WebApp.initData !== undefined); },
+            send: function (json) { window.Telegram.WebApp.sendData(json); window.Telegram.WebApp.close(); }
+        };
+        if (window.Telegram && window.Telegram.WebApp) { window.Telegram.WebApp.ready(); window.Telegram.WebApp.expand(); }
+    </script>
     <script src="_framework/blazor.webassembly#[.{fingerprint}].js"></script>
     <script>navigator.serviceWorker.register('service-worker.js', {updateViaCache: 'none'});</script>
 </body>

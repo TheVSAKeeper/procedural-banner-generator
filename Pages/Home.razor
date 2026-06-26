@@ -74,11 +74,49 @@
                         <InputFile OnChange="ImportStyle" accept=".json,application/json"
                                    class="visually-hidden-file" />
                     </label>
+                    @if (_inTelegram)
+                    {
+                        <button class="btn" @onclick="SendToTelegram" disabled="@(_typeface is null)"
+                                title="Отправить этот стиль боту – он нарисует баннер прямо в Telegram">
+                            <Icon Name="send" />
+                            Отправить в Telegram
+                        </button>
+                    }
                 </div>
             </section>
         </div>
 
         <div class="controls">
+            <section class="panel">
+                <span class="module-head">Профиль стиля</span>
+                <div class="grid">
+                    <label>Активный профиль
+                        <select @onchange="OnProfileSelected"
+                                title="Профиль стиля – отдельный сохранённый набор. Импортируй стиль из бота в свой профиль, чтобы не перезатереть остальные.">
+                            @foreach (var p in _profiles)
+                            {
+                                <option value="@p.Id" selected="@(p.Id == _activeId)">@p.Name</option>
+                            }
+                        </select>
+                    </label>
+                    <div class="actions">
+                        <button class="btn-ghost" @onclick="NewProfile" title="Новый пустой профиль">
+                            <Icon Name="plus" /> Новый
+                        </button>
+                        <button class="btn-ghost" @onclick="RenameProfile" title="Переименовать профиль">
+                            <Icon Name="pencil" /> Переименовать
+                        </button>
+                        <button class="btn-ghost" @onclick="DuplicateProfile" title="Скопировать профиль">
+                            <Icon Name="copy" /> Дублировать
+                        </button>
+                        <button class="btn-danger" @onclick="DeleteProfile" disabled="@(_profiles.Count <= 1)"
+                                title="Удалить профиль (последний удалить нельзя)">
+                            <Icon Name="trash-2" /> Удалить
+                        </button>
+                    </div>
+                </div>
+            </section>
+
             <section class="panel">
                 <span class="module-head">Параметры выпуска</span>
                 <div class="grid">
@@ -444,6 +482,11 @@
     private string? _error;
 
     private const string StorageKey = "banner-state-v1";
+    private const string ProfilesKey = "banner-profiles-v1";
+
+    private List<ProfileEntry> _profiles = [];
+    private string _activeId = "";
+    private bool _inTelegram;
 
     private int _renderDebounceMs = 150;
     private CancellationTokenSource? _renderDebounce;
@@ -452,6 +495,8 @@
     {
         var bytes = await Http.GetByteArrayAsync("Bender-Black.otf");
         _typeface = SKTypeface.FromData(SKData.CreateCopy(bytes));
+        try { _inTelegram = await JS.InvokeAsync<bool>("tgWebApp.available"); }
+        catch { _inTelegram = false; }
         await LoadStateAsync();
         Render();
     }
@@ -647,18 +692,43 @@
         }
     }
 
+    private SavedState CaptureState() => new()
+    {
+        Title = _title, Subtitle = _subtitle, Tagline = _tagline,
+        Seed = _seed, Width = _width, Height = _height,
+        Transparent = _transparent, RenderDebounceMs = _renderDebounceMs, Style = _style,
+    };
+
+    private void ApplyState(SavedState s)
+    {
+        _title = s.Title;
+        _subtitle = s.Subtitle;
+        _tagline = s.Tagline ?? "";
+        _seed = s.Seed;
+        _width = s.Width;
+        _height = s.Height;
+        _transparent = s.Transparent;
+        _renderDebounceMs = s.RenderDebounceMs;
+        _style = s.Style;
+    }
+
+    // Снимок редактора всегда живёт в активном профиле; в localStorage пишем весь реестр.
     private async Task SaveStateAsync()
     {
-        var state = new SavedState
+        var active = _profiles.FirstOrDefault(p => p.Id == _activeId);
+        if (active is null)
         {
-            Title = _title, Subtitle = _subtitle, Tagline = _tagline,
-            Seed = _seed, Width = _width, Height = _height,
-            Transparent = _transparent, RenderDebounceMs = _renderDebounceMs, Style = _style,
-        };
+            active = new ProfileEntry { Id = NewId(), Name = "Локальный" };
+            _profiles.Add(active);
+            _activeId = active.Id;
+        }
+
+        active.State = CaptureState();
 
         try
         {
-            await JS.InvokeVoidAsync("localStorage.setItem", StorageKey, JsonSerializer.Serialize(state));
+            var store = new ProfileStore { ActiveId = _activeId, Profiles = _profiles };
+            await JS.InvokeVoidAsync("localStorage.setItem", ProfilesKey, JsonSerializer.Serialize(store));
         }
         catch
         {
@@ -670,27 +740,139 @@
     {
         try
         {
-            var json = await JS.InvokeAsync<string?>("localStorage.getItem", StorageKey);
-            if (string.IsNullOrEmpty(json))
+            var json = await JS.InvokeAsync<string?>("localStorage.getItem", ProfilesKey);
+            if (!string.IsNullOrEmpty(json)
+                && JsonSerializer.Deserialize<ProfileStore>(json) is { Profiles.Count: > 0 } store)
+            {
+                _profiles = store.Profiles;
+                _activeId = _profiles.Any(p => p.Id == store.ActiveId) ? store.ActiveId : _profiles[0].Id;
+                ApplyState(_profiles.First(p => p.Id == _activeId).State);
                 return;
+            }
 
-            var s = JsonSerializer.Deserialize<SavedState>(json);
-            if (s is null)
-                return;
-
-            _title = s.Title;
-            _subtitle = s.Subtitle;
-            _tagline = s.Tagline ?? "";
-            _seed = s.Seed;
-            _width = s.Width;
-            _height = s.Height;
-            _transparent = s.Transparent;
-            _renderDebounceMs = s.RenderDebounceMs;
-            _style = s.Style;
+            // Миграция одиночного снимка banner-state-v1 → профиль «Локальный» (ничего не теряем).
+            var legacy = await JS.InvokeAsync<string?>("localStorage.getItem", StorageKey);
+            var migrated = string.IsNullOrEmpty(legacy) ? null : JsonSerializer.Deserialize<SavedState>(legacy);
+            SeedSingleProfile(migrated ?? CaptureState());
         }
         catch
         {
-            // битый снимок или недоступное хранилище – стартуем с дефолтов
+            // битый снимок или недоступное хранилище – один профиль из текущих дефолтов
+            if (_profiles.Count == 0)
+                SeedSingleProfile(CaptureState());
+        }
+    }
+
+    private void SeedSingleProfile(SavedState state)
+    {
+        var entry = new ProfileEntry { Id = NewId(), Name = "Локальный", State = state };
+        _profiles = [entry];
+        _activeId = entry.Id;
+        ApplyState(state);
+    }
+
+    private static string NewId() => Guid.NewGuid().ToString("N")[..8];
+
+    private string NextProfileName()
+    {
+        for (var n = _profiles.Count + 1; ; n++)
+        {
+            var name = $"Профиль {n}";
+            if (_profiles.All(p => p.Name != name))
+                return name;
+        }
+    }
+
+    private async Task OnProfileSelected(ChangeEventArgs e)
+    {
+        var id = (string?)e.Value;
+        if (string.IsNullOrEmpty(id) || id == _activeId)
+            return;
+
+        await SaveStateAsync();
+        _activeId = id;
+        ApplyState(_profiles.First(p => p.Id == id).State);
+        Render();
+        await SaveStateAsync();
+    }
+
+    private async Task NewProfile()
+    {
+        await SaveStateAsync();
+        var entry = new ProfileEntry { Id = NewId(), Name = NextProfileName(), State = new() };
+        _profiles.Add(entry);
+        _activeId = entry.Id;
+        ApplyState(entry.State);
+        Render();
+        await SaveStateAsync();
+    }
+
+    private async Task DuplicateProfile()
+    {
+        await SaveStateAsync();
+        var src = _profiles.First(p => p.Id == _activeId);
+        var copy = new ProfileEntry { Id = NewId(), Name = src.Name + " копия", State = src.State };
+        _profiles.Add(copy);
+        _activeId = copy.Id;
+        Render();
+        await SaveStateAsync();
+    }
+
+    private async Task RenameProfile()
+    {
+        var current = _profiles.FirstOrDefault(p => p.Id == _activeId);
+        if (current is null)
+            return;
+
+        var name = await JS.InvokeAsync<string?>("prompt", "Имя профиля:", current.Name);
+        if (string.IsNullOrWhiteSpace(name))
+            return;
+
+        current.Name = name.Trim();
+        await SaveStateAsync();
+    }
+
+    private async Task DeleteProfile()
+    {
+        if (_profiles.Count <= 1)
+            return;
+
+        _profiles.RemoveAll(p => p.Id == _activeId);
+        _activeId = _profiles[0].Id;
+        ApplyState(_profiles[0].State);
+        Render();
+        await SaveStateAsync();
+    }
+
+    private async Task SendToTelegram()
+    {
+        var name = _profiles.FirstOrDefault(p => p.Id == _activeId)?.Name ?? "";
+        var spec = new BannerSpec
+        {
+            Title = string.IsNullOrWhiteSpace(_title) ? " " : _title,
+            Subtitle = _subtitle ?? "",
+            Tagline = string.IsNullOrWhiteSpace(_tagline) ? null : _tagline,
+            Seed = _seed,
+            Width = Math.Clamp(_width, 320, 3840),
+            Height = Math.Clamp(_height, 180, 2160),
+            Transparent = _transparent,
+        };
+
+        var json = new BannerExport(BannerExport.CurrentVersion, name, spec, _style).ToJson();
+        var bytes = System.Text.Encoding.UTF8.GetByteCount(json);
+        if (bytes >= BannerExport.MaxPayloadBytes)
+        {
+            _error = $"Стиль слишком большой для отправки ({bytes} ≥ {BannerExport.MaxPayloadBytes} байт). Упрости стиль.";
+            return;
+        }
+
+        try
+        {
+            await JS.InvokeVoidAsync("tgWebApp.send", json);
+        }
+        catch (Exception ex)
+        {
+            _error = "Не удалось отправить в Telegram: " + ex.Message;
         }
     }
 
@@ -722,6 +904,19 @@
         public bool Transparent { get; init; }
         public int RenderDebounceMs { get; init; } = 150;
         public BannerStyle Style { get; init; } = new();
+    }
+
+    private sealed class ProfileEntry
+    {
+        public string Id { get; set; } = "";
+        public string Name { get; set; } = "";
+        public SavedState State { get; set; } = new();
+    }
+
+    private sealed class ProfileStore
+    {
+        public string ActiveId { get; set; } = "";
+        public List<ProfileEntry> Profiles { get; set; } = [];
     }
 
 }
