@@ -35,6 +35,10 @@
                 {
                     <p class="status err">@_error</p>
                 }
+                else if (_notice is not null)
+                {
+                    <p class="status">@_notice</p>
+                }
             </section>
 
             <section class="toolbar">
@@ -81,6 +85,16 @@
                                 title="Отправить этот стиль боту – он нарисует баннер прямо в Telegram">
                             <Icon Name="send" />
                             Отправить в Telegram
+                        </button>
+                        <label class="bot-prompt">Что поменять в стиле
+                            <textarea rows="2" placeholder="плашку краснее, заголовок крупнее"
+                                      @bind="_botPrompt" @bind:event="oninput"></textarea>
+                        </label>
+                        <button class="btn" @onclick="SendPromptToTelegram"
+                                disabled="@(_typeface is null || string.IsNullOrWhiteSpace(_botPrompt))"
+                                title="Бот правит этот стиль через LLM и присылает обратно кнопку «Открыть на сайте»">
+                            <Icon Name="wand-sparkles" />
+                            Править через бота
                         </button>
                     }
                 </div>
@@ -481,9 +495,12 @@
     private string? _imgSrc;
     private string? _exportHref;
     private string? _error;
+    private string? _notice;
+    private string _botPrompt = "";
 
     private const string StorageKey = "banner-state-v1";
     private const string ProfilesKey = "banner-profiles-v1";
+    private const string SentKey = "banner-sent-v1";
 
     private List<ProfileEntry> _profiles = [];
     private string _activeId = "";
@@ -503,7 +520,8 @@
         Render();
     }
 
-    // Стиль из ссылки Mini App (бот кладёт его в ?s= при /banneredit) — в отдельный профиль «Из Telegram»,
+    // Стиль из ссылки Mini App (бот кладёт его в ?s=, а имя профиля – в ?p=). Правленый стиль возвращается
+    // в тот же профиль, откуда уходил боту; во всех остальных случаях – в отдельный профиль «Из Telegram»,
     // чтобы не перезатереть текущий. Профиль переиспользуется (идемпотентно на перезагрузках).
     private async Task TryImportFromLink()
     {
@@ -514,18 +532,76 @@
         try
         {
             var style = BannerCore.BannerLink.UnpackStyle(packed);
-            const string name = "Из Telegram";
-            var slot = _profiles.FirstOrDefault(p => p.Name == name)
-                       ?? AddProfile(name);
-            slot.State = CaptureState() with { Style = style };
+            var slot = await TakeSentProfileAsync(GetQueryParam(Nav.Uri, "p"));
+            if (slot is not null)
+            {
+                slot.State = slot.State with { Style = style };
+            }
+            else
+            {
+                const string name = "Из Telegram";
+                slot = _profiles.FirstOrDefault(p => p.Name == name) ?? AddProfile(name);
+                slot.State = CaptureState() with { Style = style };
+            }
+
             _activeId = slot.Id;
             ApplyState(slot.State);
+            _notice = $"Стиль из Telegram лёг в профиль «{slot.Name}»";
             await SaveStateAsync();
         }
         catch (Exception ex)
         {
             _error = "Не удалось загрузить стиль из Telegram: " + ex.Message;
         }
+    }
+
+    // Профиль, из которого стиль уходил боту на правку. Меток может быть несколько (промпты из разных
+    // профилей идут параллельно), поэтому ищем по имени из ?p= и сверяем стиль: если профиль с тех пор
+    // менялся, правка бота затёрла бы работу, сделанную на сайте, пока бот думал. Метка одноразовая.
+    private async Task<ProfileEntry?> TakeSentProfileAsync(string? profileName)
+    {
+        if (string.IsNullOrEmpty(profileName))
+            return null;
+
+        try
+        {
+            var marks = await LoadSentMarksAsync();
+            var slot = _profiles.FirstOrDefault(p => p.Name == profileName);
+            if (slot is null || !marks.TryGetValue(slot.Id, out var styleJson)
+                             || slot.State.Style.ToJson() != styleJson)
+            {
+                return null;
+            }
+
+            marks.Remove(slot.Id);
+            await SaveSentMarksAsync(marks);
+            return slot;
+        }
+        catch
+        {
+            // нет метки или хранилище недоступно – стиль ляжет в «Из Telegram»
+            return null;
+        }
+    }
+
+    private async Task<Dictionary<string, string>> LoadSentMarksAsync()
+    {
+        var raw = await JS.InvokeAsync<string?>("localStorage.getItem", SentKey);
+        if (string.IsNullOrEmpty(raw))
+            return [];
+
+        return JsonSerializer.Deserialize<Dictionary<string, string>>(raw) ?? [];
+    }
+
+    private async Task SaveSentMarksAsync(Dictionary<string, string> marks)
+    {
+        if (marks.Count == 0)
+        {
+            await JS.InvokeVoidAsync("localStorage.removeItem", SentKey);
+            return;
+        }
+
+        await JS.InvokeVoidAsync("localStorage.setItem", SentKey, JsonSerializer.Serialize(marks));
     }
 
     private ProfileEntry AddProfile(string name)
@@ -894,8 +970,14 @@
         await SaveStateAsync();
     }
 
-    private async Task SendToTelegram()
+    private Task SendToTelegram() => SendToBotAsync("");
+
+    // Правка промптом: бот правит присланный стиль через LLM и возвращает кнопку «Открыть на сайте».
+    private Task SendPromptToTelegram() => SendToBotAsync(_botPrompt.Trim());
+
+    private async Task SendToBotAsync(string prompt)
     {
+        _notice = null;
         var name = _profiles.FirstOrDefault(p => p.Id == _activeId)?.Name ?? "";
         var spec = new BannerSpec
         {
@@ -908,13 +990,18 @@
             Transparent = _transparent,
         };
 
-        var json = new BannerExport(BannerExport.CurrentVersion, name, spec, _style).ToJson();
+        var json = new BannerExport(BannerExport.CurrentVersion, name, spec, _style, prompt).ToJson();
         var bytes = System.Text.Encoding.UTF8.GetByteCount(json);
         if (bytes >= BannerExport.MaxPayloadBytes)
         {
             _error = $"Стиль слишком большой для отправки ({bytes} ≥ {BannerExport.MaxPayloadBytes} байт). Упрости стиль.";
             return;
         }
+
+        // Метку ставит только правка промптом: обычная отправка ссылки назад не ждёт, а метка чужого
+        // профиля от неё бы протухла.
+        if (prompt.Length > 0)
+            await RememberSentAsync();
 
         try
         {
@@ -923,6 +1010,23 @@
         catch (Exception ex)
         {
             _error = "Не удалось отправить в Telegram: " + ex.Message;
+        }
+    }
+
+    // Метка «стиль ушёл боту на правку»: по ней возвращённый стиль ложится обратно в тот же профиль.
+    // Метки копятся по профилям, поэтому вторая отправка из другого профиля первую не затирает.
+    private async Task RememberSentAsync()
+    {
+        await SaveStateAsync();
+        try
+        {
+            var marks = await LoadSentMarksAsync();
+            marks[_activeId] = _style.ToJson();
+            await SaveSentMarksAsync(marks);
+        }
+        catch
+        {
+            // localStorage недоступен – стиль вернётся в профиль «Из Telegram»
         }
     }
 
