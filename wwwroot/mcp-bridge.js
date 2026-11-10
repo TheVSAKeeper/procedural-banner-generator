@@ -6,7 +6,7 @@
 //   node mcp-bridge.js --daemon   – запуск фонового моста на 127.0.0.1:5219 (для мгновенного коннекта вкладки)
 //   node mcp-bridge.js --serve    – работа моста в текущем процессе (HTTP /mcp, /rpc, /health + WS /ws)
 //   node mcp-bridge.js status     – проверка связи с мостом и вкладкой браузера
-//   node mcp-bridge.js call <tool> [jsonArgs] [--out banner.png] – прямой вызов инструмента из CLI
+//   node mcp-bridge.js call <tool> [jsonArgs|@args.json] [--args-file args.json] [--stdin] [--out banner.png] – прямой вызов инструмента из CLI
 
 'use strict';
 
@@ -629,6 +629,8 @@ function startHubServer() {
                     JSON.stringify({
                         ok: true,
                         port: PORT,
+                        mcpHttpUrl: `http://${HOST}:${PORT}/mcp`,
+                        nodePath: process.execPath,
                         scriptPath: __filename,
                         connectedClients: active.length,
                         activeClient: active.length > 0 ? active[active.length - 1].info : null,
@@ -832,22 +834,68 @@ async function main() {
                 await new Promise((r) => setTimeout(r, 250));
                 const check = await httpJsonRequest('GET', '/health', null, 1000).catch(() => null);
                 if (check && check.data && check.data.connectedClients > 0) {
-                    console.log(JSON.stringify({ ...check.data, scriptPath: __filename }, null, 2));
+                    console.log(
+                        JSON.stringify(
+                            {
+                                ...check.data,
+                                mcpHttpUrl: `http://${HOST}:${PORT}/mcp`,
+                                nodePath: process.execPath,
+                                scriptPath: __filename,
+                            },
+                            null,
+                            2
+                        )
+                    );
                     return;
                 }
             }
         }
         const finalCheck = await httpJsonRequest('GET', '/health', null, 1000).catch(() => ({ data: status }));
-        console.log(JSON.stringify({ ...(finalCheck.data || {}), scriptPath: __filename }, null, 2));
+        console.log(
+            JSON.stringify(
+                {
+                    ...(finalCheck.data || {}),
+                    mcpHttpUrl: `http://${HOST}:${PORT}/mcp`,
+                    nodePath: process.execPath,
+                    scriptPath: __filename,
+                },
+                null,
+                2
+            )
+        );
         return;
     }
 
     if (cmd === 'status') {
         try {
             const health = await httpJsonRequest('GET', '/health', null, 1500);
-            console.log(JSON.stringify({ ...(health.data || {}), scriptPath: __filename }, null, 2));
+            console.log(
+                JSON.stringify(
+                    {
+                        ...(health.data || {}),
+                        mcpHttpUrl: `http://${HOST}:${PORT}/mcp`,
+                        nodePath: process.execPath,
+                        scriptPath: __filename,
+                    },
+                    null,
+                    2
+                )
+            );
         } catch {
-            console.log(JSON.stringify({ ok: false, running: false, port: PORT, scriptPath: __filename }, null, 2));
+            console.log(
+                JSON.stringify(
+                    {
+                        ok: false,
+                        running: false,
+                        port: PORT,
+                        mcpHttpUrl: `http://${HOST}:${PORT}/mcp`,
+                        nodePath: process.execPath,
+                        scriptPath: __filename,
+                    },
+                    null,
+                    2
+                )
+            );
         }
         return;
     }
@@ -855,21 +903,46 @@ async function main() {
     if (cmd === 'call') {
         const toolName = args[1];
         if (!toolName) {
-            console.error('Использование: node mcp-bridge.js call <tool> [jsonArgs] [--out banner.png]');
+            console.error(
+                'Использование: node mcp-bridge.js call <tool> [jsonArgs|@args.json] [--args-file args.json] [--stdin] [--out banner.png]'
+            );
             process.exit(1);
         }
         let jsonArgs = '{}';
+        let argsFile = null;
+        let useStdin = false;
         let outPath = null;
         for (let i = 2; i < args.length; i++) {
             if (args[i] === '--out' && i + 1 < args.length) {
                 outPath = args[++i];
+            } else if (args[i] === '--args-file' && i + 1 < args.length) {
+                argsFile = args[++i];
+            } else if (args[i] === '--stdin') {
+                useStdin = true;
             } else if (!args[i].startsWith('--')) {
                 jsonArgs = args[i];
             }
         }
 
+        if (useStdin) {
+            jsonArgs = fs.readFileSync(0, 'utf8').replace(/^\uFEFF/, '');
+        } else if (argsFile) {
+            jsonArgs = fs.readFileSync(path.resolve(argsFile), 'utf8').replace(/^\uFEFF/, '');
+        } else if (jsonArgs.startsWith('@') && jsonArgs.length > 1) {
+            jsonArgs = fs.readFileSync(path.resolve(jsonArgs.slice(1)), 'utf8').replace(/^\uFEFF/, '');
+        }
+
         await ensureDaemonRunning();
-        const parsedArgs = JSON.parse(jsonArgs);
+        let parsedArgs;
+        try {
+            parsedArgs = JSON.parse(jsonArgs);
+        } catch (err) {
+            if (!useStdin && !argsFile && fs.existsSync(jsonArgs)) {
+                parsedArgs = JSON.parse(fs.readFileSync(path.resolve(jsonArgs), 'utf8').replace(/^\uFEFF/, ''));
+            } else {
+                throw err;
+            }
+        }
         const result = await invokeTool(toolName, parsedArgs);
         const obj = typeof result === 'string' ? JSON.parse(result) : result;
 

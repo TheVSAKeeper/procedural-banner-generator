@@ -606,23 +606,32 @@
         return $$"""
             Подключись к открытому в моём браузере сайту процедурного генератора баннеров ({{baseUri}}) через MCP для создания и редактирования шаблонов:
 
-            1. Скачай скрипт локального MCP-моста (без внешних зависимостей) и запусти фоновый демон (команда выведет точный абсолютный путь `scriptPath`):
-            node -e "const fs=require('fs'),p=require('path'),os=require('os'),cp=require('child_process'),d=p.join(os.homedir(),'.banner-mcp'),f=p.join(d,'mcp-bridge.js');fs.mkdirSync(d,{recursive:true});fs.writeFileSync(p.join(d,'package.json'),'{\"type\":\"commonjs\"}');fetch('{{bridgeUrl}}').then(r=>{if(!r.ok)throw new Error(r.status);return r.text()}).then(t=>{fs.writeFileSync(f,t);console.log(cp.execFileSync(process.execPath,[f,'--daemon'],{encoding:'utf8'}))})"
+            0. Перед установкой (или сразу после проверки связи) коротко уточни у меня два вопроса (если я не указал это сразу – используй вариант по умолчанию):
+            - **Куда ставить скрипт моста и прописывать MCP-сервер:** по умолчанию – локально в текущую директорию, откуда запущен агент (`./.banner-mcp/mcp-bridge.js` и локальная/проектная конфигурация MCP), либо глобально в профиль пользователя (`~/.banner-mcp` и глобальный конфиг агента).
+            - **Делать ли резервные копии профилей на диск:** так как сайт хранит шаблоны в `localStorage` браузера, спроси, нужно ли сохранять JSON-бэкапы шаблонов (через `get_template`) и итоговые PNG на диск в рабочей папке (например, в `./banner-backups/`).
 
-            2. Пропиши MCP-сервер `banner-generator` в конфигурацию агента, подставив полный абсолютный путь `scriptPath` из вывода шага 1 (без символа `~`, так как `spawn` на Windows его не раскрывает: stdio команда `node`, аргумент `[ "<scriptPath>" ]`, либо HTTP MCP `http://127.0.0.1:5219/mcp`).
-            Если новые stdio MCP-серверы в текущей сессии подхватываются только после перезапуска, вызывай инструменты прямо сейчас через CLI по тому же абсолютному пути:
-            `node "<scriptPath>" call <tool> '<json>' [--out preview.png]`
+            1. Скачай скрипт локального MCP-моста (без внешних зависимостей) в текущую рабочую директорию `./.banner-mcp` (или в выбранную папку) и запусти фоновый демон (команда выведет полные пути `nodePath`, `scriptPath` и адрес `mcpHttpUrl`):
+            node -e "const fs=require('fs'),p=require('path'),cp=require('child_process'),d=p.join(process.cwd(),'.banner-mcp'),f=p.join(d,'mcp-bridge.js');fs.mkdirSync(d,{recursive:true});fs.writeFileSync(p.join(d,'package.json'),JSON.stringify({type:'commonjs'}));fetch('{{bridgeUrl}}').then(r=>{if(!r.ok)throw new Error(r.status);return r.text()}).then(t=>{fs.writeFileSync(f,t);console.log(cp.execFileSync(process.execPath,[f,'--daemon'],{encoding:'utf8'}))})"
+            - Примечание по окружению и оболочке: скачивание скрипта и доступ к локальному мосту на `127.0.0.1:5219` требуют разрешения на сеть и loopback (вне изолированной песочницы, если среда блокирует `127.0.0.1`). Проверь `node --version`: если `node` не найден в `PATH` неинтерактивной оболочки или обёртка менеджера версий (`nvm`, `fnm`, `volta` и т.п.) не инициализирована, найди установленный `node`/`node.exe` в стандартных путях системы (`Program Files\nodejs`, `/usr/local/bin`, `/opt/homebrew/bin`, папки менеджеров версий) и используй его полный путь `nodePath` (при необходимости скачай `{{bridgeUrl}}` в `.banner-mcp/mcp-bridge.js` штатными средствами оболочки и запусти `"<nodePath>" "<scriptPath>" --daemon`).
+
+            2. Зарегистрируй MCP-сервер `banner-generator` в конфигурации агента (по умолчанию – локально для текущей директории/проекта, либо глобально в пользовательской конфигурации по выбору пользователя или если агент поддерживает только единый конфиг):
+            - Предпочтительный транспорт – streamable HTTP по адресу `http://127.0.0.1:5219/mcp`.
+            - Если среда поддерживает только `stdio` – укажи полные абсолютные пути `nodePath` и `scriptPath` из вывода шага 1 (без символа `~`, так как `spawn` на Windows его не раскрывает): команда `<nodePath>`, аргументы `[ "<scriptPath>" ]`.
+            - Если только что добавленный MCP-сервер (для **любого** транспорта – и HTTP, и stdio) не появился среди инструментов текущей сессии без перезапуска, вызывай инструменты прямо сейчас через CLI по полным путям:
+              `"<nodePath>" "<scriptPath>" call <tool> '<json>' [--out preview.png]`
+              (в PowerShell сложный JSON можно передавать через файл: `"<nodePath>" "<scriptPath>" call <tool> --args-file patch.json --out preview.png`).
 
             Доступные инструменты MCP:
-            - `list_templates` – список всех шаблонов на сайте и какой активен;
+            - `list_templates` – список всех сохранённых шаблонов на сайте и какой сейчас активен (`isActive: true`);
             - `get_template` – полный JSON шаблона (`spec` + `style`) и история шагов (`history`);
             - `get_style_guide` – описание всех 10 секций и ручек `BannerStyle` и дефолтных значений;
-            - `create_template` – создать новый шаблон (можно клонировать `baseTemplateId`/`baseTemplateName` и передать частичный `spec`/`style`);
+            - `create_template` – создать новый шаблон (по умолчанию клонируй активный шаблон через `baseTemplateId`/`baseTemplateName`, если нужно сохранить текущий стиль, явно задавай или очищай `title`/`subtitle`/`tagline` под новую задачу и оставляй `activate: true`, если не просили иначе);
             - `update_template` – частично пропатчить `spec` и `style` шаблона (достаточно передать только меняемые секции/поля и краткий `summary` для истории шагов) с мгновенной перерисовкой в браузере;
             - `undo_template` – откатить изменения шаблона на 1 или несколько шагов назад (`steps`) по общей истории правок;
             - `duplicate_template`, `rename_template`, `delete_template`, `set_active_template`, `reset_template_style`, `render_banner`.
 
-            После каждой правки проверяй возвращённый рендер PNG (или файл `--out preview.png`) и при необходимости докручивай параметры через `update_template` или откатывай неудачный шаг через `undo_template`. Проверь связь вызовом `list_templates` и напиши, какие шаблоны сейчас открыты на сайте.
+            После каждой правки сохраняй превью PNG в доступный файл (`--out preview.png` или из ответа MCP), открывай его визуально для проверки и при неудаче докручивай параметры через `update_template` или откатывай шаг через `undo_template` до отчёта.
+            Проверь связь вызовом `list_templates`: выведи полный список сохранённых шаблонов, отдельно назови активный (`isActive: true`), сообщи статус подключения (`connectedClients`), зарегистрированный транспорт и полный путь `scriptPath`, и уточни у меня настройки размещения и бэкапа профилей на диск.
             """;
     }
 
