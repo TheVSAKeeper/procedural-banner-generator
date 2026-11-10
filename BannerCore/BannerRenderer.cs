@@ -1,4 +1,4 @@
-using SkiaSharp;
+﻿using SkiaSharp;
 using System.Text.RegularExpressions;
 
 namespace BannerCore;
@@ -218,7 +218,7 @@ public sealed partial class BannerRenderer(BannerStyle style)
                 paint.ImageFilter = SKImageFilter.CreateBlur(blur, blur);
             }
 
-            canvas.DrawImage(image, dest, paint);
+            canvas.DrawImage(image, dest, SKSamplingOptions.Default, paint);
         }
 
         var darken = Math.Clamp(bg.DarkenAlpha, 0f, 1f);
@@ -600,6 +600,6 @@ public sealed partial class BannerRenderer(BannerStyle style)
 
         var alpha = (byte)(Math.Clamp(l.Opacity, 0f, 1f) * 255);
         using var paint = new SKPaint { IsAntialias = true, Color = SKColors.White.WithAlpha(alpha) };
-        canvas.DrawImage(logo, dest, paint);
+        canvas.DrawImage(logo, dest, SKSamplingOptions.Default, paint);
     }
 }

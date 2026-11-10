@@ -1,4 +1,4 @@
-using SkiaSharp;
+﻿using SkiaSharp;
 
 namespace BannerCore;
 
@@ -44,9 +44,9 @@ public static class Grunge
             points.Add(new(rect.Left + Fbm(y / (scale * 0.4f), seed + 23) * endAmp, y));
         }
 
-        var path = new SKPath();
-        path.AddPoly(points.ToArray());
-        return path;
+        using var builder = new SKPathBuilder();
+        builder.AddPoly(points.ToArray(), true);
+        return builder.Detach();
     }
 
     /// <summary>
