@@ -1,6 +1,8 @@
 @page "/"
+@implements IDisposable
 @using SkiaSharp
 @using System.Text.Json
+@using System.Text.Json.Nodes
 @inject HttpClient Http
 @inject IJSRuntime JS
 @inject Microsoft.AspNetCore.Components.NavigationManager Nav
@@ -24,7 +26,7 @@
                     }
                     else
                     {
-                        <div class="monitor-empty">— нет сигнала —</div>
+                        <div class="monitor-empty">– нет сигнала –</div>
                     }
                 </div>
                 @if (_typeface is null)
@@ -54,6 +56,12 @@
                         <Icon Name="dices" />
                         Случайный вид
                     </button>
+                    <button class="btn-ghost" @onclick="UndoLastStepAsync"
+                            disabled="@(_typeface is null || ActiveHistory.Count == 0)"
+                            title="@(ActiveHistory.Count > 0 ? $"Откатить: {ActiveHistory[^1].Label}" : "История изменений этого шаблона пуста")">
+                        <Icon Name="undo" />
+                        Откатить @(ActiveHistory.Count > 0 ? $"({ActiveHistory.Count})" : "")
+                    </button>
                     <button class="btn-danger" @onclick="ResetStyle" disabled="@(_typeface is null)"
                             title="Вернуть все настройки стиля к значениям по умолчанию">
                         <Icon Name="rotate-ccw" />
@@ -79,24 +87,6 @@
                         <InputFile OnChange="ImportStyle" accept=".json,application/json"
                                    class="visually-hidden-file" />
                     </label>
-                    @if (_inTelegram)
-                    {
-                        <button class="btn" @onclick="SendToTelegram" disabled="@(_typeface is null)"
-                                title="Отправить этот стиль боту – он нарисует баннер прямо в Telegram">
-                            <Icon Name="send" />
-                            Отправить в Telegram
-                        </button>
-                        <label class="bot-prompt">Что поменять в стиле
-                            <textarea rows="2" placeholder="плашку краснее, заголовок крупнее"
-                                      @bind="_botPrompt" @bind:event="oninput"></textarea>
-                        </label>
-                        <button class="btn" @onclick="SendPromptToTelegram"
-                                disabled="@(_typeface is null || string.IsNullOrWhiteSpace(_botPrompt))"
-                                title="Бот правит этот стиль через LLM и присылает обратно кнопку «Открыть на сайте»">
-                            <Icon Name="wand-sparkles" />
-                            Править через бота
-                        </button>
-                    }
                 </div>
             </section>
         </div>
@@ -107,7 +97,7 @@
                 <div class="grid">
                     <label>Активный профиль
                         <select @onchange="OnProfileSelected"
-                                title="Профиль стиля – отдельный сохранённый набор. Импортируй стиль из бота в свой профиль, чтобы не перезатереть остальные.">
+                                title="Профиль стиля – отдельный сохранённый шаблон оформления баннера.">
                             @foreach (var p in _profiles)
                             {
                                 <option value="@p.Id" selected="@(p.Id == _activeId)">@p.Name</option>
@@ -129,6 +119,46 @@
                             <Icon Name="trash-2" /> Удалить
                         </button>
                     </div>
+                    <div class="mcp-bar">
+                        <span class="mcp-status @(_mcpConnected ? "live" : null)"
+                              title="Статус локального MCP-моста (ws://127.0.0.1:5219/ws)">
+                            <span class="mcp-dot"></span>
+                            @(_mcpConnected ? "MCP: мост подключён" : "MCP: ожидание моста")
+                        </span>
+                        <button type="button" class="btn" @onclick="CopyAgentPrompt"
+                                title="Скопировать промпт в буфер обмена и вставить в любого агента (Claude Code, Codex, Cursor, Antigravity) для подключения по MCP">
+                            <Icon Name="@(_promptCopied ? "check" : "terminal")" />
+                            @(_promptCopied ? "Промпт скопирован" : "Промпт для агента (MCP)")
+                        </button>
+                    </div>
+                    <details class="mcp-details">
+                        <summary>Показать промпт установки MCP</summary>
+                        <textarea class="mcp-prompt-view" rows="6" readonly value="@BuildAgentPrompt()"></textarea>
+                    </details>
+                    @if (ActiveHistory.Count > 0)
+                    {
+                        <details class="mcp-details">
+                            <summary>История шагов (@ActiveHistory.Count)</summary>
+                            <div class="history-list">
+                                @for (var i = ActiveHistory.Count - 1; i >= 0; i--)
+                                {
+                                    var stepsBack = ActiveHistory.Count - i;
+                                    var step = ActiveHistory[i];
+                                    <div class="history-row">
+                                        <div class="history-meta" title="@step.Label">
+                                            <span class="history-label">@step.Label</span>
+                                            <span class="history-time">шаг –@stepsBack · @step.Timestamp</span>
+                                        </div>
+                                        <button type="button" class="btn-ghost history-btn"
+                                                @onclick="() => UndoStepsAsync(stepsBack)"
+                                                title="Откатить до состояния перед этим шагом">
+                                            <Icon Name="undo" /> Вернуть
+                                        </button>
+                                    </div>
+                                }
+                            </div>
+                        </details>
+                    }
                 </div>
             </section>
 
@@ -166,25 +196,25 @@
 
                     <details class="sec">
                         <summary>Палитра</summary>
-                        <ColorRow Label="Грань зелёного — верх" Value="@_style.Palette.GreenFaceTop"
+                        <ColorRow Label="Грань зелёного – верх" Value="@_style.Palette.GreenFaceTop"
                                   ValueChanged="v => P(p => p with { GreenFaceTop = v })" />
-                        <ColorRow Label="Грань зелёного — середина" Value="@_style.Palette.GreenFaceMid"
+                        <ColorRow Label="Грань зелёного – середина" Value="@_style.Palette.GreenFaceMid"
                                   ValueChanged="v => P(p => p with { GreenFaceMid = v })" />
-                        <ColorRow Label="Грань зелёного — низ" Value="@_style.Palette.GreenFaceBottom"
+                        <ColorRow Label="Грань зелёного – низ" Value="@_style.Palette.GreenFaceBottom"
                                   ValueChanged="v => P(p => p with { GreenFaceBottom = v })" />
                         <ColorRow Label="Экструзия зелёного" Value="@_style.Palette.GreenExtrude"
                                   ValueChanged="v => P(p => p with { GreenExtrude = v })" />
-                        <ColorRow Label="Грань белого — верх" Value="@_style.Palette.WhiteFaceTop"
+                        <ColorRow Label="Грань белого – верх" Value="@_style.Palette.WhiteFaceTop"
                                   ValueChanged="v => P(p => p with { WhiteFaceTop = v })" />
-                        <ColorRow Label="Грань белого — середина" Value="@_style.Palette.WhiteFaceMid"
+                        <ColorRow Label="Грань белого – середина" Value="@_style.Palette.WhiteFaceMid"
                                   ValueChanged="v => P(p => p with { WhiteFaceMid = v })" />
-                        <ColorRow Label="Грань белого — низ" Value="@_style.Palette.WhiteFaceBottom"
+                        <ColorRow Label="Грань белого – низ" Value="@_style.Palette.WhiteFaceBottom"
                                   ValueChanged="v => P(p => p with { WhiteFaceBottom = v })" />
                         <ColorRow Label="Экструзия белого" Value="@_style.Palette.WhiteExtrude"
                                   ValueChanged="v => P(p => p with { WhiteExtrude = v })" />
-                        <ColorRow Label="Полоса — верх" Value="@_style.Palette.BandTop"
+                        <ColorRow Label="Полоса – верх" Value="@_style.Palette.BandTop"
                                   ValueChanged="v => P(p => p with { BandTop = v })" />
-                        <ColorRow Label="Полоса — низ" Value="@_style.Palette.BandBottom"
+                        <ColorRow Label="Полоса – низ" Value="@_style.Palette.BandBottom"
                                   ValueChanged="v => P(p => p with { BandBottom = v })" />
                         <ColorRow Label="Подмазка под номером" Value="@_style.Palette.Smear"
                                   ValueChanged="v => P(p => p with { Smear = v })" />
@@ -298,12 +328,12 @@
                         <RangeRow Label="Плотность выгрызов" Min="0" Max="3" Step="0.05f"
                                   Value="@_style.Plate.DistressDensity"
                                   ValueChanged="v => Pl(s => s with { DistressDensity = v })" />
-                        <RangeRow Label="Тень — смещение Y" Min="0" Max="30" Step="1"
+                        <RangeRow Label="Тень – смещение Y" Min="0" Max="30" Step="1"
                                   Value="@_style.Plate.ShadowOffsetY"
                                   ValueChanged="v => Pl(s => s with { ShadowOffsetY = v })" />
-                        <RangeRow Label="Тень — блюр" Min="0" Max="30" Step="1" Value="@_style.Plate.ShadowBlur"
+                        <RangeRow Label="Тень – блюр" Min="0" Max="30" Step="1" Value="@_style.Plate.ShadowBlur"
                                   ValueChanged="v => Pl(s => s with { ShadowBlur = v })" />
-                        <RangeRow Label="Тень — альфа" Min="0" Max="255" Step="1" Value="@_style.Plate.ShadowAlpha"
+                        <RangeRow Label="Тень – альфа" Min="0" Max="255" Step="1" Value="@_style.Plate.ShadowAlpha"
                                   ValueChanged="v => Pl(s => s with { ShadowAlpha = (int)MathF.Round(v) })" />
                     </details>
 
@@ -496,149 +526,142 @@
     private string? _exportHref;
     private string? _error;
     private string? _notice;
-    private string _botPrompt = "";
 
     private const string StorageKey = "banner-state-v1";
     private const string ProfilesKey = "banner-profiles-v1";
-    private const string SentKey = "banner-sent-v1";
+    private const int MaxHistorySteps = 20;
+    private const long ManualCoalesceWindowMs = 1500;
 
     private List<ProfileEntry> _profiles = [];
     private string _activeId = "";
-    private bool _inTelegram;
+    private bool _mcpConnected;
+    private bool _promptCopied;
+    private DotNetObjectReference<Home>? _dotNetRef;
+    private long _lastManualPushTicks;
+    private string _lastManualPushProfileId = "";
 
     private int _renderDebounceMs = 150;
     private CancellationTokenSource? _renderDebounce;
+
+    private IReadOnlyList<HistoryEntry> ActiveHistory =>
+        _profiles.FirstOrDefault(p => p.Id == _activeId)?.History ?? [];
 
     protected override async Task OnInitializedAsync()
     {
         var bytes = await Http.GetByteArrayAsync("Bender-Black.otf");
         _typeface = SKTypeface.FromData(SKData.CreateCopy(bytes));
-        try { _inTelegram = await JS.InvokeAsync<bool>("tgWebApp.available"); }
-        catch { _inTelegram = false; }
         await LoadStateAsync();
-        await TryImportFromLink();
         Render();
-    }
 
-    // Стиль из ссылки Mini App (бот кладёт его в ?s=, а имя профиля – в ?p=). Правленый стиль возвращается
-    // в тот же профиль, откуда уходил боту; во всех остальных случаях – в отдельный профиль «Из Telegram»,
-    // чтобы не перезатереть текущий. Профиль переиспользуется (идемпотентно на перезагрузках).
-    private async Task TryImportFromLink()
-    {
-        var packed = GetQueryParam(Nav.Uri, "s");
-        if (string.IsNullOrEmpty(packed))
-            return;
-
+        _dotNetRef = DotNetObjectReference.Create(this);
         try
         {
-            var style = BannerCore.BannerLink.UnpackStyle(packed);
-            var slot = await TakeSentProfileAsync(GetQueryParam(Nav.Uri, "p"));
-            if (slot is not null)
-            {
-                slot.State = slot.State with { Style = style };
-            }
-            else
-            {
-                const string name = "Из Telegram";
-                slot = _profiles.FirstOrDefault(p => p.Name == name) ?? AddProfile(name);
-                slot.State = CaptureState() with { Style = style };
-            }
-
-            _activeId = slot.Id;
-            ApplyState(slot.State);
-            _notice = $"Стиль из Telegram лёг в профиль «{slot.Name}»";
-            await SaveStateAsync();
-        }
-        catch (Exception ex)
-        {
-            _error = "Не удалось загрузить стиль из Telegram: " + ex.Message;
-        }
-    }
-
-    // Профиль, из которого стиль уходил боту на правку. Меток может быть несколько (промпты из разных
-    // профилей идут параллельно), поэтому ищем по имени из ?p= и сверяем стиль: если профиль с тех пор
-    // менялся, правка бота затёрла бы работу, сделанную на сайте, пока бот думал. Метка одноразовая.
-    private async Task<ProfileEntry?> TakeSentProfileAsync(string? profileName)
-    {
-        if (string.IsNullOrEmpty(profileName))
-            return null;
-
-        try
-        {
-            var marks = await LoadSentMarksAsync();
-            var slot = _profiles.FirstOrDefault(p => p.Name == profileName);
-            if (slot is null || !marks.TryGetValue(slot.Id, out var styleJson)
-                             || slot.State.Style.ToJson() != styleJson)
-            {
-                return null;
-            }
-
-            marks.Remove(slot.Id);
-            await SaveSentMarksAsync(marks);
-            return slot;
+            await JS.InvokeVoidAsync("bannerMcp.bind", _dotNetRef, "ws://127.0.0.1:5219/ws");
         }
         catch
         {
-            // нет метки или хранилище недоступно – стиль ляжет в «Из Telegram»
-            return null;
+            // Мост опционален – при ошибке JS-интеропа редактор продолжает работать автономно.
         }
     }
 
-    private async Task<Dictionary<string, string>> LoadSentMarksAsync()
+    public void Dispose()
     {
-        var raw = await JS.InvokeAsync<string?>("localStorage.getItem", SentKey);
-        if (string.IsNullOrEmpty(raw))
-            return [];
-
-        return JsonSerializer.Deserialize<Dictionary<string, string>>(raw) ?? [];
+        _renderDebounce?.Cancel();
+        _renderDebounce?.Dispose();
+        _background?.Dispose();
+        _logo?.Dispose();
+        _ = JS.InvokeVoidAsync("bannerMcp.unbind");
+        _dotNetRef?.Dispose();
     }
 
-    private async Task SaveSentMarksAsync(Dictionary<string, string> marks)
+    [JSInvokable]
+    public void OnMcpConnectionChanged(bool connected)
     {
-        if (marks.Count == 0)
+        _mcpConnected = connected;
+        StateHasChanged();
+    }
+
+    private async Task CopyAgentPrompt()
+    {
+        try
         {
-            await JS.InvokeVoidAsync("localStorage.removeItem", SentKey);
-            return;
+            await JS.InvokeAsync<bool>("bannerMcp.copyText", BuildAgentPrompt());
+            _promptCopied = true;
+            _notice = "Промпт для агента скопирован – вставьте его в чат агента";
+            StateHasChanged();
+            await Task.Delay(2200);
+            _promptCopied = false;
+            StateHasChanged();
         }
-
-        await JS.InvokeVoidAsync("localStorage.setItem", SentKey, JsonSerializer.Serialize(marks));
-    }
-
-    private ProfileEntry AddProfile(string name)
-    {
-        var entry = new ProfileEntry { Id = NewId(), Name = name };
-        _profiles.Add(entry);
-        return entry;
-    }
-
-    private static string? GetQueryParam(string uri, string key)
-    {
-        var query = new Uri(uri).Query;
-        if (query.Length <= 1)
-            return null;
-
-        foreach (var pair in query[1..].Split('&'))
+        catch (Exception ex)
         {
-            var eq = pair.IndexOf('=');
-            if (eq > 0 && Uri.UnescapeDataString(pair[..eq]) == key)
-                return Uri.UnescapeDataString(pair[(eq + 1)..]);
+            _error = "Не удалось скопировать промпт: " + ex.Message;
         }
+    }
 
-        return null;
+    private string BuildAgentPrompt()
+    {
+        var baseUri = Nav.BaseUri.EndsWith('/') ? Nav.BaseUri : Nav.BaseUri + "/";
+        var bridgeUrl = baseUri + "mcp-bridge.js";
+        return $$"""
+            Подключись к открытому в моём браузере сайту процедурного генератора баннеров ({{baseUri}}) через MCP для создания и редактирования шаблонов:
+
+            1. Скачай скрипт локального MCP-моста (без внешних зависимостей) и запусти фоновый демон (команда выведет точный абсолютный путь `scriptPath`):
+            node -e "const fs=require('fs'),p=require('path'),os=require('os'),cp=require('child_process'),d=p.join(os.homedir(),'.banner-mcp'),f=p.join(d,'mcp-bridge.js');fs.mkdirSync(d,{recursive:true});fs.writeFileSync(p.join(d,'package.json'),'{\"type\":\"commonjs\"}');fetch('{{bridgeUrl}}').then(r=>{if(!r.ok)throw new Error(r.status);return r.text()}).then(t=>{fs.writeFileSync(f,t);console.log(cp.execFileSync(process.execPath,[f,'--daemon'],{encoding:'utf8'}))})"
+
+            2. Пропиши MCP-сервер `banner-generator` в конфигурацию агента, подставив полный абсолютный путь `scriptPath` из вывода шага 1 (без символа `~`, так как `spawn` на Windows его не раскрывает: stdio команда `node`, аргумент `[ "<scriptPath>" ]`, либо HTTP MCP `http://127.0.0.1:5219/mcp`).
+            Если новые stdio MCP-серверы в текущей сессии подхватываются только после перезапуска, вызывай инструменты прямо сейчас через CLI по тому же абсолютному пути:
+            `node "<scriptPath>" call <tool> '<json>' [--out preview.png]`
+
+            Доступные инструменты MCP:
+            - `list_templates` – список всех шаблонов на сайте и какой активен;
+            - `get_template` – полный JSON шаблона (`spec` + `style`) и история шагов (`history`);
+            - `get_style_guide` – описание всех 10 секций и ручек `BannerStyle` и дефолтных значений;
+            - `create_template` – создать новый шаблон (можно клонировать `baseTemplateId`/`baseTemplateName` и передать частичный `spec`/`style`);
+            - `update_template` – частично пропатчить `spec` и `style` шаблона (достаточно передать только меняемые секции/поля и краткий `summary` для истории шагов) с мгновенной перерисовкой в браузере;
+            - `undo_template` – откатить изменения шаблона на 1 или несколько шагов назад (`steps`) по общей истории правок;
+            - `duplicate_template`, `rename_template`, `delete_template`, `set_active_template`, `reset_template_style`, `render_banner`.
+
+            После каждой правки проверяй возвращённый рендер PNG (или файл `--out preview.png`) и при необходимости докручивай параметры через `update_template` или откатывай неудачный шаг через `undo_template`. Проверь связь вызовом `list_templates` и напиши, какие шаблоны сейчас открыты на сайте.
+            """;
     }
 
     private async Task Randomize()
     {
         _seed = Random.Shared.Next(1, 1_000_000);
         Render();
-        await SaveStateAsync();
+        await CommitUiStateAsync("Случайный seed");
     }
 
     private async Task ResetStyle()
     {
         _style = new();
         Render();
-        await SaveStateAsync();
+        await CommitUiStateAsync("Сброс стиля");
+    }
+
+    private Task UndoLastStepAsync() => UndoStepsAsync(1);
+
+    private async Task UndoStepsAsync(int steps)
+    {
+        await FlushActiveProfileAsync();
+        var active = _profiles.FirstOrDefault(p => p.Id == _activeId);
+        if (active is null || active.History.Count == 0)
+            return;
+
+        var count = Math.Clamp(steps, 1, active.History.Count);
+        var targetEntry = active.History[^count];
+        active.History.RemoveRange(active.History.Count - count, count);
+        active.State = targetEntry.State;
+        _lastManualPushTicks = 0;
+
+        ApplyState(active.State);
+        _error = null;
+        _notice = count == 1
+            ? $"Откат: {targetEntry.Label}"
+            : $"Откат на {count} шаг. ({targetEntry.Label})";
+        Render();
+        await PersistProfilesAsync();
     }
 
     private void ToggleTransparent()
@@ -677,7 +700,7 @@
         }
 
         Render();
-        await SaveStateAsync();
+        await CommitUiStateAsync();
         StateHasChanged();
     }
 
@@ -739,7 +762,7 @@
             _background = await DecodeImage(e.File);
             _error = null;
             Render();
-            await SaveStateAsync();
+            await CommitUiStateAsync();
         }
         catch (Exception ex)
         {
@@ -757,7 +780,7 @@
                 _style = _style with { Logo = _style.Logo with { Enabled = true } };
             _error = null;
             Render();
-            await SaveStateAsync();
+            await CommitUiStateAsync("Загрузка логотипа");
         }
         catch (Exception ex)
         {
@@ -838,19 +861,68 @@
         _style = s.Style;
     }
 
-    // Снимок редактора всегда живёт в активном профиле; в localStorage пишем весь реестр.
-    private async Task SaveStateAsync()
+    private ProfileEntry EnsureActiveProfile()
     {
         var active = _profiles.FirstOrDefault(p => p.Id == _activeId);
         if (active is null)
         {
-            active = new ProfileEntry { Id = NewId(), Name = "Локальный" };
+            active = new ProfileEntry { Id = NewId(), Name = "Локальный", State = CaptureState() };
             _profiles.Add(active);
             _activeId = active.Id;
         }
+        return active;
+    }
 
-        active.State = CaptureState();
+    // Фиксирует ручные правки редактора в истории активного профиля и сохраняет реестр в localStorage.
+    private async Task CommitUiStateAsync(string? explicitLabel = null)
+    {
+        var active = EnsureActiveProfile();
+        var current = CaptureState();
+        if (HasTemplateChanged(active.State, current))
+        {
+            var now = Environment.TickCount64;
+            if (explicitLabel is null
+                && _lastManualPushProfileId == active.Id
+                && now - _lastManualPushTicks <= ManualCoalesceWindowMs
+                && active.History.Count > 0)
+            {
+                var top = active.History[^1];
+                if (!HasTemplateChanged(top.State, current))
+                {
+                    active.History.RemoveAt(active.History.Count - 1);
+                }
+                else
+                {
+                    active.History[^1] = top with
+                    {
+                        Label = DescribeChange("Ручная правка", top.State, current),
+                        Timestamp = DateTime.Now.ToString("HH:mm:ss"),
+                    };
+                }
+                _lastManualPushTicks = now;
+            }
+            else
+            {
+                var prefix = explicitLabel ?? "Ручная правка";
+                PushHistory(active, DescribeChange(prefix, active.State, current), active.State);
+                if (explicitLabel is null)
+                {
+                    _lastManualPushProfileId = active.Id;
+                    _lastManualPushTicks = now;
+                }
+                else
+                {
+                    _lastManualPushTicks = 0;
+                }
+            }
+        }
 
+        active.State = current;
+        await PersistProfilesAsync();
+    }
+
+    private async Task PersistProfilesAsync()
+    {
         try
         {
             var store = new ProfileStore { ActiveId = _activeId, Profiles = _profiles };
@@ -860,6 +932,49 @@
         {
             // ponytail: localStorage может быть недоступен (private mode / quota / отключён) – тихо без сохранения
         }
+    }
+
+    private static void PushHistory(ProfileEntry profile, string label, SavedState previousState)
+    {
+        profile.History.Add(new HistoryEntry
+        {
+            Label = label,
+            Timestamp = DateTime.Now.ToString("HH:mm:ss"),
+            State = previousState,
+        });
+        while (profile.History.Count > MaxHistorySteps)
+        {
+            profile.History.RemoveAt(0);
+        }
+    }
+
+    private static bool HasTemplateChanged(SavedState a, SavedState b) =>
+        a.Title != b.Title
+        || a.Subtitle != b.Subtitle
+        || (a.Tagline ?? "") != (b.Tagline ?? "")
+        || a.Seed != b.Seed
+        || a.Width != b.Width
+        || a.Height != b.Height
+        || a.Transparent != b.Transparent
+        || a.Style != b.Style;
+
+    private static string DescribeChange(string prefix, SavedState before, SavedState after, string? customSummary = null)
+    {
+        var parts = new List<string>();
+        if (before.Title != after.Title || before.Subtitle != after.Subtitle || (before.Tagline ?? "") != (after.Tagline ?? ""))
+            parts.Add("текст");
+        if (before.Seed != after.Seed)
+            parts.Add("seed");
+        if (before.Width != after.Width || before.Height != after.Height || before.Transparent != after.Transparent)
+            parts.Add("кадр");
+        parts.AddRange(GetChangedSections(before.Style, after.Style));
+
+        var suffix = parts.Count > 0 ? $" ({string.Join(", ", parts)})" : "";
+        if (!string.IsNullOrWhiteSpace(customSummary))
+        {
+            return $"MCP: {customSummary.Trim()}{suffix}";
+        }
+        return $"{prefix}{suffix}";
     }
 
     private async Task LoadStateAsync()
@@ -904,7 +1019,7 @@
         for (var n = _profiles.Count + 1; ; n++)
         {
             var name = $"Профиль {n}";
-            if (_profiles.All(p => p.Name != name))
+            if (_profiles.All(p => !string.Equals(p.Name, name, StringComparison.OrdinalIgnoreCase)))
                 return name;
         }
     }
@@ -915,37 +1030,38 @@
         if (string.IsNullOrEmpty(id) || id == _activeId)
             return;
 
-        await SaveStateAsync();
+        await FlushActiveProfileAsync();
         _activeId = id;
         ApplyState(_profiles.First(p => p.Id == id).State);
         Render();
-        await SaveStateAsync();
+        await PersistProfilesAsync();
     }
 
     private async Task NewProfile()
     {
-        await SaveStateAsync();
+        await FlushActiveProfileAsync();
         var entry = new ProfileEntry { Id = NewId(), Name = NextProfileName(), State = new() };
         _profiles.Add(entry);
         _activeId = entry.Id;
         ApplyState(entry.State);
         Render();
-        await SaveStateAsync();
+        await PersistProfilesAsync();
     }
 
     private async Task DuplicateProfile()
     {
-        await SaveStateAsync();
+        await FlushActiveProfileAsync();
         var src = _profiles.First(p => p.Id == _activeId);
-        var copy = new ProfileEntry { Id = NewId(), Name = src.Name + " копия", State = src.State };
+        var copy = new ProfileEntry { Id = NewId(), Name = UniqueProfileName(src.Name + " копия"), State = src.State };
         _profiles.Add(copy);
         _activeId = copy.Id;
         Render();
-        await SaveStateAsync();
+        await PersistProfilesAsync();
     }
 
     private async Task RenameProfile()
     {
+        await FlushActiveProfileAsync();
         var current = _profiles.FirstOrDefault(p => p.Id == _activeId);
         if (current is null)
             return;
@@ -954,8 +1070,16 @@
         if (string.IsNullOrWhiteSpace(name))
             return;
 
-        current.Name = name.Trim();
-        await SaveStateAsync();
+        var trimmed = name.Trim();
+        if (_profiles.Any(p => p.Id != current.Id && string.Equals(p.Name, trimmed, StringComparison.OrdinalIgnoreCase)))
+        {
+            _error = $"Профиль с именем «{trimmed}» уже существует";
+            return;
+        }
+
+        current.Name = trimmed;
+        _error = null;
+        await PersistProfilesAsync();
     }
 
     private async Task DeleteProfile()
@@ -965,69 +1089,680 @@
 
         _profiles.RemoveAll(p => p.Id == _activeId);
         _activeId = _profiles[0].Id;
+        _lastManualPushTicks = 0;
         ApplyState(_profiles[0].State);
         Render();
-        await SaveStateAsync();
+        await PersistProfilesAsync();
     }
 
-    private Task SendToTelegram() => SendToBotAsync("");
-
-    // Правка промптом: бот правит присланный стиль через LLM и возвращает кнопку «Открыть на сайте».
-    private Task SendPromptToTelegram() => SendToBotAsync(_botPrompt.Trim());
-
-    private async Task SendToBotAsync(string prompt)
+    private static readonly JsonSerializerOptions McpJsonOptions = new(JsonSerializerDefaults.Web)
     {
-        _notice = null;
-        var name = _profiles.FirstOrDefault(p => p.Id == _activeId)?.Name ?? "";
-        var spec = new BannerSpec
-        {
-            Title = string.IsNullOrWhiteSpace(_title) ? " " : _title,
-            Subtitle = _subtitle ?? "",
-            Tagline = string.IsNullOrWhiteSpace(_tagline) ? null : _tagline,
-            Seed = _seed,
-            Width = Math.Clamp(_width, 320, 3840),
-            Height = Math.Clamp(_height, 180, 2160),
-            Transparent = _transparent,
-        };
+        WriteIndented = false,
+    };
 
-        var json = new BannerExport(BannerExport.CurrentVersion, name, spec, _style, prompt).ToJson();
-        var bytes = System.Text.Encoding.UTF8.GetByteCount(json);
-        if (bytes >= BannerExport.MaxPayloadBytes)
-        {
-            _error = $"Стиль слишком большой для отправки ({bytes} ≥ {BannerExport.MaxPayloadBytes} байт). Упрости стиль.";
-            return;
-        }
-
-        // Метку ставит только правка промптом: обычная отправка ссылки назад не ждёт, а метка чужого
-        // профиля от неё бы протухла.
-        if (prompt.Length > 0)
-            await RememberSentAsync();
-
+    [JSInvokable]
+    public async Task<string> InvokeMcpToolAsync(string tool, string argsJson)
+    {
         try
         {
-            await JS.InvokeVoidAsync("tgWebApp.send", json);
+            var args = string.IsNullOrWhiteSpace(argsJson)
+                ? new JsonObject()
+                : JsonNode.Parse(argsJson)?.AsObject() ?? new JsonObject();
+
+            // Синхронизируем текущие поля редактора в активный профиль перед любым чтением/правкой
+            await FlushActiveProfileAsync();
+
+            var response = tool switch
+            {
+                "list_templates" => McpListTemplates(),
+                "get_template" => McpGetTemplate(args),
+                "get_style_guide" => McpGetStyleGuide(),
+                "create_template" => await McpCreateTemplateAsync(args),
+                "update_template" => await McpUpdateTemplateAsync(args),
+                "undo_template" => await McpUndoTemplateAsync(args),
+                "duplicate_template" => await McpDuplicateTemplateAsync(args),
+                "rename_template" => await McpRenameTemplateAsync(args),
+                "delete_template" => await McpDeleteTemplateAsync(args),
+                "set_active_template" => await McpSetActiveTemplateAsync(args),
+                "reset_template_style" => await McpResetTemplateStyleAsync(args),
+                "render_banner" => McpRenderBanner(args),
+                _ => throw new InvalidOperationException($"Неизвестный инструмент MCP: {tool}"),
+            };
+
+            return JsonSerializer.Serialize(response, McpJsonOptions);
         }
         catch (Exception ex)
         {
-            _error = "Не удалось отправить в Telegram: " + ex.Message;
+            _error = "MCP: " + ex.Message;
+            StateHasChanged();
+            return JsonSerializer.Serialize(new { error = ex.Message }, McpJsonOptions);
         }
     }
 
-    // Метка «стиль ушёл боту на правку»: по ней возвращённый стиль ложится обратно в тот же профиль.
-    // Метки копятся по профилям, поэтому вторая отправка из другого профиля первую не затирает.
-    private async Task RememberSentAsync()
+    private async Task FlushActiveProfileAsync()
     {
-        await SaveStateAsync();
-        try
+        _renderDebounce?.Cancel();
+        var active = _profiles.FirstOrDefault(p => p.Id == _activeId);
+        if (active is null)
+            return;
+
+        var current = CaptureState();
+        if (HasTemplateChanged(active.State, current))
         {
-            var marks = await LoadSentMarksAsync();
-            marks[_activeId] = _style.ToJson();
-            await SaveSentMarksAsync(marks);
+            PushHistory(active, DescribeChange("Ручная правка", active.State, current), active.State);
+            active.State = current;
+            Render();
+            await PersistProfilesAsync();
+            StateHasChanged();
         }
-        catch
+        _lastManualPushTicks = 0;
+    }
+
+    private object McpListTemplates() => new
+    {
+        activeId = _activeId,
+        activeName = _profiles.FirstOrDefault(p => p.Id == _activeId)?.Name ?? "",
+        count = _profiles.Count,
+        templates = _profiles.Select(p => new
         {
-            // localStorage недоступен – стиль вернётся в профиль «Из Telegram»
+            id = p.Id,
+            name = p.Name,
+            isActive = p.Id == _activeId,
+            historyCount = p.History.Count,
+            title = p.State.Title,
+            subtitle = p.State.Subtitle,
+            tagline = p.State.Tagline ?? "",
+            seed = p.State.Seed,
+            width = p.State.Width,
+            height = p.State.Height,
+            transparent = p.State.Transparent,
+        }).ToArray(),
+    };
+
+    private object McpGetTemplate(JsonObject args)
+    {
+        var entry = FindProfile(args, required: true)!;
+        var includePreview = GetBool(args, "includePreviewPng", defaultValue: false);
+        return BuildTemplatePayload(entry, changedSections: null, includePreview);
+    }
+
+    private static object McpGetStyleGuide() => new
+    {
+        summary = "Декларативный стиль баннера (BannerStyle) из 10 секций. В update_template и create_template достаточно передавать только изменяемые секции и поля.",
+        conventions = new
+        {
+            colors = "#RRGGBB или #RRGGBBAA (альфа в конце, CSS-порядок)",
+            fractions = "*Fraction – доля от размеров кадра (Width/Height)",
+            factors = "*Factor – доля от кегля заголовка (или высоты соответствующего элемента)",
+            numericPrefix = "Ведущий номер в заголовке ('290. ...') автоматически рисуется зелёным 3D с подмазкой Smear, остальной текст – белым 3D",
+        },
+        sections = new
+        {
+            palette = "Чистые цвета: грани зелёного номера (greenFaceTop/Mid/Bottom, greenExtrude), грани белого заголовка (whiteFaceTop/Mid/Bottom, whiteExtrude), полоса (bandTop/Bottom), подмазка (smear), плашка (plate), подзаголовок (subtitleText), обводка (titleStroke), чипсы и брызги (chips, darkSplatter).",
+            layout = "Кегли, конденс, базовая линия, наклон блока (rotationDegrees -10..10), поля плашки и полосы.",
+            titleFx = "Глубина (extrudeDepthFactor) и наклон (extrudeStepX) 3D-экструзии, обводка (strokeWidthFactor), градиент грани, зерно (mottle) и выгрызы (distressDensity).",
+            plate = "Чёрная рваная плашка за заголовком: рваность краёв/торцов, зубья кисти слева/справа, пятна краски, выгрызы, тень.",
+            smear = "Зелёная подмазка под номером выпуска: enabled, вынос за плашку, рваность, зубья, зерно, выгрызы.",
+            band = "Полоса под подзаголовком: рваность краёв/торцов, зубья слева/справа, зерно, выгрызы, потёртость текста подзаголовка.",
+            accents = "Чипсы вдоль верхней кромки (chipsLeftCount, chipsRightCount, chipsSpread), зелёная крошка (splatterGreenCount), тёмные брызги (splatterDarkCount).",
+            tagline = "Третья строка под подзаголовком: enabled, sizeFactor, color, baselineGapFactor, scaleX, distressDensity.",
+            logo = "Логотип в углу: enabled, corner (tl|tr|bl|br), sizeFraction, opacity, marginFraction.",
+            background = "Обработка загруженной картинки-фона: darkenAlpha (0..1), blurSigma (0..30).",
+        },
+        defaultStyle = new BannerStyle(),
+    };
+
+    private async Task<object> McpCreateTemplateAsync(JsonObject args)
+    {
+        var requestedName = GetString(args, "name")?.Trim();
+        var name = string.IsNullOrWhiteSpace(requestedName) ? NextProfileName() : UniqueProfileName(requestedName);
+
+        ProfileEntry? baseProfile = null;
+        if (GetString(args, "baseTemplateId") is { Length: > 0 } baseId
+            || GetString(args, "baseTemplateName") is { Length: > 0 } baseName)
+        {
+            var lookup = new JsonObject
+            {
+                ["id"] = GetString(args, "baseTemplateId"),
+                ["name"] = GetString(args, "baseTemplateName"),
+            };
+            baseProfile = FindProfile(lookup, required: true);
         }
+
+        var baseState = baseProfile is not null
+            ? baseProfile.State with { }
+            : new SavedState
+            {
+                Title = "290. ЛЕДОКОЛ XIX",
+                Subtitle = "КОРОЛЬ МАШИННОГО ЗАЛА",
+                Tagline = "",
+                Seed = 290,
+                Width = 1280,
+                Height = 720,
+                Transparent = false,
+                RenderDebounceMs = _renderDebounceMs,
+                Style = new BannerStyle(),
+            };
+
+        var updatedState = ApplyPartialPatch(baseState, args, out var changedSections);
+        var entry = new ProfileEntry { Id = NewId(), Name = name, State = updatedState };
+        _profiles.Add(entry);
+
+        var activate = GetBool(args, "activate", defaultValue: true);
+        if (activate)
+        {
+            _activeId = entry.Id;
+            ApplyState(entry.State);
+            Render();
+        }
+
+        _error = null;
+        _notice = $"MCP: создан шаблон «{entry.Name}»";
+        await PersistProfilesAsync();
+        StateHasChanged();
+
+        var includePreview = GetBool(args, "includePreviewPng", defaultValue: true);
+        return BuildTemplatePayload(entry, changedSections, includePreview);
+    }
+
+    private async Task<object> McpUpdateTemplateAsync(JsonObject args)
+    {
+        var entry = FindProfile(args, required: true)!;
+        if (GetString(args, "newName") is { } newName && !string.IsNullOrWhiteSpace(newName))
+        {
+            var trimmedName = newName.Trim();
+            EnsureUniqueProfileName(trimmedName, entry.Id);
+            entry.Name = trimmedName;
+        }
+
+        var beforeState = entry.State;
+        var updatedState = ApplyPartialPatch(beforeState, args, out var changedSections);
+        var summary = GetString(args, "summary")?.Trim();
+
+        if (HasTemplateChanged(beforeState, updatedState))
+        {
+            PushHistory(entry, DescribeChange("MCP: правка", beforeState, updatedState, summary), beforeState);
+            _lastManualPushTicks = 0;
+        }
+
+        entry.State = updatedState;
+
+        var activate = GetBool(args, "activate", defaultValue: true);
+        if (activate || entry.Id == _activeId)
+        {
+            _activeId = entry.Id;
+            ApplyState(entry.State);
+            Render();
+        }
+
+        _error = null;
+        _notice = string.IsNullOrWhiteSpace(summary)
+            ? $"MCP: обновлён шаблон «{entry.Name}»"
+            : $"MCP: «{entry.Name}» – {summary}";
+        await PersistProfilesAsync();
+        StateHasChanged();
+
+        var includePreview = GetBool(args, "includePreviewPng", defaultValue: true);
+        return BuildTemplatePayload(entry, changedSections, includePreview);
+    }
+
+    private async Task<object> McpUndoTemplateAsync(JsonObject args)
+    {
+        var entry = FindProfile(args, required: true)!;
+        if (entry.History.Count == 0)
+        {
+            throw new InvalidOperationException($"История изменений шаблона «{entry.Name}» пуста – откатывать нечего.");
+        }
+
+        var requestedSteps = GetInt(args, "steps") ?? 1;
+        if (requestedSteps < 1)
+        {
+            throw new InvalidOperationException("Параметр 'steps' должен быть целым числом >= 1.");
+        }
+
+        var count = Math.Clamp(requestedSteps, 1, entry.History.Count);
+        var beforeUndo = entry.State;
+        var targetEntry = entry.History[^count];
+        var undoneSteps = entry.History
+            .Skip(entry.History.Count - count)
+            .Reverse()
+            .Select(h => h.Label)
+            .ToArray();
+
+        entry.History.RemoveRange(entry.History.Count - count, count);
+        entry.State = targetEntry.State;
+        _lastManualPushTicks = 0;
+
+        var changedSections = GetChangedSections(beforeUndo.Style, entry.State.Style);
+        if (entry.Id == _activeId)
+        {
+            ApplyState(entry.State);
+            Render();
+        }
+
+        _error = null;
+        _notice = count == 1
+            ? $"MCP: откат «{entry.Name}» ({targetEntry.Label})"
+            : $"MCP: откат «{entry.Name}» на {count} шаг.";
+        await PersistProfilesAsync();
+        StateHasChanged();
+
+        var includePreview = GetBool(args, "includePreviewPng", defaultValue: true);
+        return BuildTemplatePayload(entry, changedSections, includePreview, undoneSteps);
+    }
+
+    private async Task<object> McpDuplicateTemplateAsync(JsonObject args)
+    {
+        var src = FindProfile(args, required: true)!;
+        var requestedName = GetString(args, "newName")?.Trim();
+        var copyName = string.IsNullOrWhiteSpace(requestedName)
+            ? UniqueProfileName(src.Name + " копия")
+            : UniqueProfileName(requestedName);
+
+        var copy = new ProfileEntry { Id = NewId(), Name = copyName, State = src.State with { } };
+        _profiles.Add(copy);
+
+        if (GetBool(args, "activate", defaultValue: true))
+        {
+            _activeId = copy.Id;
+            ApplyState(copy.State);
+            Render();
+        }
+
+        _error = null;
+        _notice = $"MCP: дублирован шаблон «{copy.Name}»";
+        await PersistProfilesAsync();
+        StateHasChanged();
+
+        return BuildTemplatePayload(copy, changedSections: null, includePreview: true);
+    }
+
+    private async Task<object> McpRenameTemplateAsync(JsonObject args)
+    {
+        var entry = FindProfile(args, required: true)!;
+        var newName = GetString(args, "newName")?.Trim();
+        if (string.IsNullOrWhiteSpace(newName))
+            throw new InvalidOperationException("Не указано новое имя шаблона (newName)");
+
+        EnsureUniqueProfileName(newName, entry.Id);
+        entry.Name = newName;
+        _error = null;
+        _notice = $"MCP: шаблон переименован в «{entry.Name}»";
+        await PersistProfilesAsync();
+        StateHasChanged();
+
+        return BuildTemplatePayload(entry, changedSections: null, includePreview: false);
+    }
+
+    private async Task<object> McpDeleteTemplateAsync(JsonObject args)
+    {
+        if (_profiles.Count <= 1)
+            throw new InvalidOperationException("Нельзя удалить последний оставшийся шаблон");
+
+        var entry = FindProfile(args, required: true)!;
+        var deletedName = entry.Name;
+        var deletedId = entry.Id;
+
+        _profiles.RemoveAll(p => p.Id == deletedId);
+        if (_activeId == deletedId)
+        {
+            _activeId = _profiles[0].Id;
+            ApplyState(_profiles[0].State);
+            Render();
+        }
+
+        _error = null;
+        _notice = $"MCP: удалён шаблон «{deletedName}»";
+        await PersistProfilesAsync();
+        StateHasChanged();
+
+        return new
+        {
+            deletedId,
+            deletedName,
+            activeId = _activeId,
+            activeName = _profiles.First(p => p.Id == _activeId).Name,
+            remainingCount = _profiles.Count,
+        };
+    }
+
+    private async Task<object> McpSetActiveTemplateAsync(JsonObject args)
+    {
+        var entry = FindProfile(args, required: true)!;
+        _activeId = entry.Id;
+        ApplyState(entry.State);
+        Render();
+        _error = null;
+        _notice = $"MCP: выбран шаблон «{entry.Name}»";
+        await PersistProfilesAsync();
+        StateHasChanged();
+
+        var includePreview = GetBool(args, "includePreviewPng", defaultValue: true);
+        return BuildTemplatePayload(entry, changedSections: null, includePreview);
+    }
+
+    private async Task<object> McpResetTemplateStyleAsync(JsonObject args)
+    {
+        var entry = FindProfile(args, required: true)!;
+        var beforeState = entry.State;
+        var after = new BannerStyle();
+        var changed = GetChangedSections(beforeState.Style, after);
+        var nextState = beforeState with { Style = after };
+
+        if (HasTemplateChanged(beforeState, nextState))
+        {
+            PushHistory(entry, DescribeChange("MCP: сброс стиля", beforeState, nextState), beforeState);
+            _lastManualPushTicks = 0;
+        }
+
+        entry.State = nextState;
+        if (entry.Id == _activeId)
+        {
+            ApplyState(entry.State);
+            Render();
+        }
+
+        _error = null;
+        _notice = $"MCP: сброшен стиль шаблона «{entry.Name}»";
+        await PersistProfilesAsync();
+        StateHasChanged();
+
+        var includePreview = GetBool(args, "includePreviewPng", defaultValue: true);
+        return BuildTemplatePayload(entry, changed, includePreview);
+    }
+
+    private object McpRenderBanner(JsonObject args)
+    {
+        var entry = FindProfile(args, required: true)!;
+        var tempState = ApplyPartialPatch(entry.State, args, out _);
+        var pngBase64 = RenderStateToBase64(tempState);
+        return new
+        {
+            templateId = entry.Id,
+            templateName = entry.Name,
+            width = Math.Clamp(tempState.Width, 320, 3840),
+            height = Math.Clamp(tempState.Height, 180, 2160),
+            seed = tempState.Seed,
+            previewPngBase64 = pngBase64,
+        };
+    }
+
+    private ProfileEntry? FindProfile(JsonObject args, bool required)
+    {
+        var id = GetString(args, "id")?.Trim();
+        var name = GetString(args, "name")?.Trim();
+
+        ProfileEntry? found = null;
+        if (!string.IsNullOrEmpty(id))
+        {
+            found = _profiles.FirstOrDefault(p => string.Equals(p.Id, id, StringComparison.OrdinalIgnoreCase));
+        }
+
+        if (found is null && !string.IsNullOrEmpty(name))
+        {
+            found = _profiles.FirstOrDefault(p => string.Equals(p.Name, name, StringComparison.OrdinalIgnoreCase));
+        }
+
+        if (found is null && string.IsNullOrEmpty(id) && string.IsNullOrEmpty(name))
+        {
+            found = _profiles.FirstOrDefault(p => p.Id == _activeId) ?? _profiles.FirstOrDefault();
+        }
+
+        if (found is null && required)
+        {
+            throw new InvalidOperationException(
+                $"Шаблон не найден (id={id ?? "–"}, name={name ?? "–"}). Вызовите list_templates для списка доступных.");
+        }
+
+        return found;
+    }
+
+    private static readonly HashSet<string> AllowedSpecKeys = new(StringComparer.OrdinalIgnoreCase)
+    {
+        "title", "subtitle", "tagline", "seed", "width", "height", "transparent",
+    };
+
+    private static SavedState ApplyPartialPatch(SavedState current, JsonObject args, out IReadOnlyList<string> changedSections)
+    {
+        var next = current;
+
+        if (TryGetPropertyIgnoreCase(args, "spec", out var specNode) && specNode is not null)
+        {
+            if (specNode is not JsonObject specObj)
+                throw new InvalidOperationException("Поле 'spec' должно быть JSON-объектом.");
+
+            foreach (var kv in specObj)
+            {
+                if (!AllowedSpecKeys.Contains(kv.Key))
+                {
+                    throw new InvalidOperationException(
+                        $"Неизвестное поле spec '{kv.Key}'. Допустимые поля: title, subtitle, tagline, seed, width, height, transparent.");
+                }
+            }
+
+            if (GetString(specObj, "title") is { } title)
+                next = next with { Title = title };
+            if (GetString(specObj, "subtitle") is { } subtitle)
+                next = next with { Subtitle = subtitle };
+            if (TryGetPropertyIgnoreCase(specObj, "tagline", out var tagNode))
+                next = next with { Tagline = tagNode?.GetValue<string>() ?? "" };
+            if (GetInt(specObj, "seed") is { } seed)
+                next = next with { Seed = seed };
+            if (GetInt(specObj, "width") is { } width)
+                next = next with { Width = Math.Clamp(width, 320, 3840) };
+            if (GetInt(specObj, "height") is { } height)
+                next = next with { Height = Math.Clamp(height, 180, 2160) };
+            if (TryGetPropertyIgnoreCase(specObj, "transparent", out var trNode) && trNode is not null)
+                next = next with { Transparent = GetBool(specObj, "transparent", defaultValue: next.Transparent) };
+        }
+
+        var beforeStyle = next.Style;
+        if (TryGetPropertyIgnoreCase(args, "style", out var styleNode) && styleNode is not null)
+        {
+            if (styleNode is not JsonObject stylePatch)
+                throw new InvalidOperationException("Поле 'style' должно быть JSON-объектом.");
+
+            var targetObj = JsonNode.Parse(beforeStyle.ToJson())!.AsObject();
+            MergeJsonObjects(targetObj, stylePatch);
+            var mergedStyle = BannerStyle.FromJson(targetObj.ToJsonString());
+            ValidateStyleColors(mergedStyle);
+            next = next with { Style = mergedStyle };
+        }
+
+        changedSections = GetChangedSections(beforeStyle, next.Style);
+        return next;
+    }
+
+    private static void MergeJsonObjects(JsonObject target, JsonObject patch)
+    {
+        foreach (var kv in patch)
+        {
+            if (kv.Value is null)
+                continue;
+
+            var existingKey = target.Select(p => p.Key)
+                .FirstOrDefault(k => string.Equals(k, kv.Key, StringComparison.OrdinalIgnoreCase));
+
+            if (existingKey is null)
+            {
+                throw new InvalidOperationException(
+                    $"Неизвестное поле или секция стиля '{kv.Key}'. Вызовите get_style_guide для списка секций и ручек.");
+            }
+
+            if (target[existingKey] is JsonObject targetChild)
+            {
+                if (kv.Value is not JsonObject patchChild)
+                    throw new InvalidOperationException($"Секция стиля '{existingKey}' должна быть JSON-объектом.");
+
+                MergeJsonObjects(targetChild, patchChild);
+            }
+            else
+            {
+                target[existingKey] = kv.Value.DeepClone();
+            }
+        }
+    }
+
+    private static void ValidateStyleColors(BannerStyle s)
+    {
+        StyleColor.Parse(s.Palette.GreenFaceTop);
+        StyleColor.Parse(s.Palette.GreenFaceMid);
+        StyleColor.Parse(s.Palette.GreenFaceBottom);
+        StyleColor.Parse(s.Palette.GreenExtrude);
+        StyleColor.Parse(s.Palette.WhiteFaceTop);
+        StyleColor.Parse(s.Palette.WhiteFaceMid);
+        StyleColor.Parse(s.Palette.WhiteFaceBottom);
+        StyleColor.Parse(s.Palette.WhiteExtrude);
+        StyleColor.Parse(s.Palette.BandTop);
+        StyleColor.Parse(s.Palette.BandBottom);
+        StyleColor.Parse(s.Palette.Smear);
+        StyleColor.Parse(s.Palette.Plate);
+        StyleColor.Parse(s.Palette.SubtitleText);
+        StyleColor.Parse(s.Palette.TitleStroke);
+        StyleColor.Parse(s.Palette.Chips);
+        StyleColor.Parse(s.Palette.DarkSplatter);
+        StyleColor.Parse(s.TitleFx.MainMottleColor);
+        StyleColor.Parse(s.TitleFx.PrefixMottleColor);
+        StyleColor.Parse(s.Plate.MottleColor);
+        StyleColor.Parse(s.Smear.MottleColor);
+        StyleColor.Parse(s.Band.MottleColor);
+        StyleColor.Parse(s.Tagline.Color);
+    }
+
+    private static IReadOnlyList<string> GetChangedSections(BannerStyle before, BannerStyle after)
+    {
+        var changed = new List<string>();
+        if (before.Palette != after.Palette) changed.Add(nameof(BannerStyle.Palette));
+        if (before.Layout != after.Layout) changed.Add(nameof(BannerStyle.Layout));
+        if (before.TitleFx != after.TitleFx) changed.Add(nameof(BannerStyle.TitleFx));
+        if (before.Plate != after.Plate) changed.Add(nameof(BannerStyle.Plate));
+        if (before.Smear != after.Smear) changed.Add(nameof(BannerStyle.Smear));
+        if (before.Band != after.Band) changed.Add(nameof(BannerStyle.Band));
+        if (before.Accents != after.Accents) changed.Add(nameof(BannerStyle.Accents));
+        if (before.Tagline != after.Tagline) changed.Add(nameof(BannerStyle.Tagline));
+        if (before.Logo != after.Logo) changed.Add(nameof(BannerStyle.Logo));
+        if (before.Background != after.Background) changed.Add(nameof(BannerStyle.Background));
+        return changed;
+    }
+
+    private object BuildTemplatePayload(
+        ProfileEntry entry,
+        IReadOnlyList<string>? changedSections,
+        bool includePreview,
+        IReadOnlyList<string>? undoneSteps = null)
+    {
+        var s = entry.State;
+        return new
+        {
+            id = entry.Id,
+            name = entry.Name,
+            isActive = entry.Id == _activeId,
+            changedSections = changedSections ?? [],
+            undoneSteps = undoneSteps ?? [],
+            historyCount = entry.History.Count,
+            history = entry.History
+                .AsEnumerable()
+                .Reverse()
+                .Select((h, idx) => new
+                {
+                    stepsBack = idx + 1,
+                    label = h.Label,
+                    timestamp = h.Timestamp,
+                })
+                .ToArray(),
+            spec = new
+            {
+                title = s.Title,
+                subtitle = s.Subtitle,
+                tagline = s.Tagline ?? "",
+                seed = s.Seed,
+                width = s.Width,
+                height = s.Height,
+                transparent = s.Transparent,
+            },
+            style = s.Style,
+            previewPngBase64 = includePreview ? RenderStateToBase64(s) : null,
+        };
+    }
+
+    private string? RenderStateToBase64(SavedState s)
+    {
+        if (_typeface is null)
+            return null;
+
+        var spec = new BannerSpec
+        {
+            Title = string.IsNullOrWhiteSpace(s.Title) ? " " : s.Title,
+            Subtitle = s.Subtitle ?? "",
+            Tagline = string.IsNullOrWhiteSpace(s.Tagline) ? null : s.Tagline,
+            Seed = s.Seed,
+            Width = Math.Clamp(s.Width, 320, 3840),
+            Height = Math.Clamp(s.Height, 180, 2160),
+            Transparent = s.Transparent,
+        };
+
+        var png = new BannerRenderer(s.Style).RenderPng(spec, _typeface, _background, _logo);
+        return Convert.ToBase64String(png);
+    }
+
+    private void EnsureUniqueProfileName(string desiredName, string excludeId)
+    {
+        if (_profiles.Any(p => p.Id != excludeId && string.Equals(p.Name, desiredName, StringComparison.OrdinalIgnoreCase)))
+        {
+            throw new InvalidOperationException($"Шаблон с именем «{desiredName}» уже существует.");
+        }
+    }
+
+    private string UniqueProfileName(string baseName)
+    {
+        if (_profiles.All(p => !string.Equals(p.Name, baseName, StringComparison.OrdinalIgnoreCase)))
+            return baseName;
+
+        for (var n = 2; ; n++)
+        {
+            var candidate = $"{baseName} ({n})";
+            if (_profiles.All(p => !string.Equals(p.Name, candidate, StringComparison.OrdinalIgnoreCase)))
+                return candidate;
+        }
+    }
+
+    private static bool TryGetPropertyIgnoreCase(JsonObject obj, string key, out JsonNode? value)
+    {
+        foreach (var kv in obj)
+        {
+            if (string.Equals(kv.Key, key, StringComparison.OrdinalIgnoreCase))
+            {
+                value = kv.Value;
+                return true;
+            }
+        }
+        value = null;
+        return false;
+    }
+
+    private static string? GetString(JsonObject obj, string key) =>
+        TryGetPropertyIgnoreCase(obj, key, out var node) && node is not null ? node.GetValue<string>() : null;
+
+    private static int? GetInt(JsonObject obj, string key)
+    {
+        if (!TryGetPropertyIgnoreCase(obj, key, out var node) || node is null)
+            return null;
+        if (node is JsonValue jv && jv.TryGetValue<int>(out var directInt))
+            return directInt;
+        if (node.GetValueKind() == JsonValueKind.String && int.TryParse(node.GetValue<string>(), out var parsed))
+            return parsed;
+        throw new InvalidOperationException($"Поле '{key}' должно быть целым числом.");
+    }
+
+    private static bool GetBool(JsonObject obj, string key, bool defaultValue)
+    {
+        if (!TryGetPropertyIgnoreCase(obj, key, out var node) || node is null)
+            return defaultValue;
+        if (node is JsonValue jv && jv.TryGetValue<bool>(out var directBool))
+            return directBool;
+        if (node.GetValueKind() == JsonValueKind.String && bool.TryParse(node.GetValue<string>(), out var parsed))
+            return parsed;
+        throw new InvalidOperationException($"Поле '{key}' должно быть булевым значением (true/false).");
     }
 
     private async Task ImportStyle(InputFileChangeEventArgs e)
@@ -1039,7 +1774,7 @@
             _style = BannerStyle.FromJson(await reader.ReadToEndAsync());
             _error = null;
             Render();
-            await SaveStateAsync();
+            await CommitUiStateAsync("Импорт стиля");
         }
         catch (Exception ex)
         {
@@ -1060,11 +1795,19 @@
         public BannerStyle Style { get; init; } = new();
     }
 
+    private sealed record HistoryEntry
+    {
+        public string Label { get; init; } = "";
+        public string Timestamp { get; init; } = "";
+        public SavedState State { get; init; } = new();
+    }
+
     private sealed class ProfileEntry
     {
         public string Id { get; set; } = "";
         public string Name { get; set; } = "";
         public SavedState State { get; set; } = new();
+        public List<HistoryEntry> History { get; set; } = [];
     }
 
     private sealed class ProfileStore

@@ -55,14 +55,151 @@
             </svg>
         </span>
     </div>
-    <script src="https://telegram.org/js/telegram-web-app.js"></script>
     <script>
-        // Мост к Telegram Mini App: available() — открыты ли внутри Telegram; send() — отдать данные боту и закрыть.
-        window.tgWebApp = {
-            available: function () { return !!(window.Telegram && window.Telegram.WebApp && window.Telegram.WebApp.initData !== undefined); },
-            send: function (json) { window.Telegram.WebApp.sendData(json); window.Telegram.WebApp.close(); }
-        };
-        if (window.Telegram && window.Telegram.WebApp) { window.Telegram.WebApp.ready(); window.Telegram.WebApp.expand(); }
+        // Мост MCP: регистрирует инструменты в браузерном WebMCP (navigator.modelContext),
+        // выставляет window.bannerMcp.call(tool, args) и держит WebSocket-соединение
+        // с локальным MCP-мостом (ws://127.0.0.1:5219/ws) для подключения любых CLI/IDE-агентов.
+        window.bannerMcp = (function () {
+            let dotNetRef = null;
+            let ws = null;
+            let reconnectTimer = null;
+            let targetWsUrl = "ws://127.0.0.1:5219/ws";
+            let disposed = false;
+
+            const toolDefs = [
+                { name: "list_templates", description: "Список всех шаблонов баннеров и активного шаблона.", inputSchema: { type: "object", properties: {} } },
+                { name: "get_template", description: "Полный JSON шаблона (spec + BannerStyle) по id/name или активного.", inputSchema: { type: "object", properties: { id: { type: "string" }, name: { type: "string" }, includePreviewPng: { type: "boolean" } } } },
+                { name: "get_style_guide", description: "Справочник всех секций и ручек стиля BannerStyle и дефолтных значений.", inputSchema: { type: "object", properties: {} } },
+                { name: "create_template", description: "Создать новый шаблон баннера (с дефолтным стилем или копией существующего) и применить spec/style.", inputSchema: { type: "object", properties: { name: { type: "string" }, baseTemplateId: { type: "string" }, baseTemplateName: { type: "string" }, activate: { type: "boolean" }, spec: { type: "object" }, style: { type: "object" } } } },
+                { name: "update_template", description: "Частично или полностью обновить spec и style шаблона (достаточно передать только меняемые ручки) и перерисовать превью.", inputSchema: { type: "object", properties: { id: { type: "string" }, name: { type: "string" }, newName: { type: "string" }, summary: { type: "string" }, activate: { type: "boolean" }, spec: { type: "object" }, style: { type: "object" } } } },
+                { name: "undo_template", description: "Откатить изменения шаблона по истории шагов на 1 или несколько шагов назад.", inputSchema: { type: "object", properties: { id: { type: "string" }, name: { type: "string" }, steps: { type: "integer" }, includePreviewPng: { type: "boolean" } } } },
+                { name: "duplicate_template", description: "Дублировать шаблон под новым именем.", inputSchema: { type: "object", properties: { id: { type: "string" }, name: { type: "string" }, newName: { type: "string" }, activate: { type: "boolean" } } } },
+                { name: "rename_template", description: "Переименовать шаблон.", inputSchema: { type: "object", properties: { id: { type: "string" }, name: { type: "string" }, newName: { type: "string" } }, required: ["newName"] } },
+                { name: "delete_template", description: "Удалить шаблон по id или имени.", inputSchema: { type: "object", properties: { id: { type: "string" }, name: { type: "string" } } } },
+                { name: "set_active_template", description: "Сделать шаблон активным на экране.", inputSchema: { type: "object", properties: { id: { type: "string" }, name: { type: "string" } } } },
+                { name: "reset_template_style", description: "Сбросить стиль шаблона к значениям по умолчанию.", inputSchema: { type: "object", properties: { id: { type: "string" }, name: { type: "string" } } } },
+                { name: "render_banner", description: "Отрендерить PNG баннера для шаблона (с опциональными переопределениями spec/style).", inputSchema: { type: "object", properties: { id: { type: "string" }, name: { type: "string" }, spec: { type: "object" }, style: { type: "object" } } } }
+            ];
+
+            async function invokeDotNet(tool, args) {
+                if (!dotNetRef) throw new Error("Редактор баннеров ещё инициализируется");
+                const raw = await dotNetRef.invokeMethodAsync("InvokeMcpToolAsync", tool, JSON.stringify(args || {}));
+                const parsed = JSON.parse(raw);
+                if (parsed && parsed.error) throw new Error(parsed.error);
+                return parsed;
+            }
+
+            function registerWebMcp() {
+                try {
+                    const mc = navigator.modelContext;
+                    if (!mc) return;
+                    for (const t of toolDefs) {
+                        if (typeof mc.registerTool === "function") {
+                            mc.registerTool({
+                                name: t.name,
+                                description: t.description,
+                                inputSchema: t.inputSchema,
+                                execute: async (args) => await invokeDotNet(t.name, args)
+                            });
+                        }
+                    }
+                } catch {
+                    // WebMCP в браузере опционален
+                }
+            }
+
+            function notifyStatus(connected) {
+                if (!dotNetRef) return;
+                dotNetRef.invokeMethodAsync("OnMcpConnectionChanged", connected).catch(() => {});
+            }
+
+            function scheduleReconnect() {
+                if (disposed || reconnectTimer) return;
+                reconnectTimer = setTimeout(() => {
+                    reconnectTimer = null;
+                    connectWs();
+                }, 2000);
+            }
+
+            function connectWs() {
+                if (disposed) return;
+                try {
+                    if (ws && (ws.readyState === WebSocket.OPEN || ws.readyState === WebSocket.CONNECTING)) {
+                        return;
+                    }
+                    ws = new WebSocket(targetWsUrl);
+                    ws.onopen = function () {
+                        notifyStatus(true);
+                        try {
+                            ws.send(JSON.stringify({ type: "hello", url: location.href }));
+                        } catch {}
+                    };
+                    ws.onmessage = async function (ev) {
+                        let msg;
+                        try { msg = JSON.parse(ev.data); } catch { return; }
+                        if (!msg || !msg.id || !msg.tool) return;
+                        try {
+                            const result = await invokeDotNet(msg.tool, msg.args || {});
+                            if (ws && ws.readyState === WebSocket.OPEN) {
+                                ws.send(JSON.stringify({ id: msg.id, result: result }));
+                            }
+                        } catch (err) {
+                            if (ws && ws.readyState === WebSocket.OPEN) {
+                                ws.send(JSON.stringify({ id: msg.id, error: String((err && err.message) || err) }));
+                            }
+                        }
+                    };
+                    ws.onclose = function () {
+                        notifyStatus(false);
+                        scheduleReconnect();
+                    };
+                    ws.onerror = function () {
+                        try { ws.close(); } catch {}
+                    };
+                } catch {
+                    notifyStatus(false);
+                    scheduleReconnect();
+                }
+            }
+
+            return {
+                bind: function (ref, wsUrl) {
+                    disposed = false;
+                    dotNetRef = ref;
+                    if (wsUrl) targetWsUrl = wsUrl;
+                    registerWebMcp();
+                    connectWs();
+                },
+                unbind: function () {
+                    disposed = true;
+                    dotNetRef = null;
+                    if (reconnectTimer) {
+                        clearTimeout(reconnectTimer);
+                        reconnectTimer = null;
+                    }
+                    if (ws) {
+                        try { ws.close(); } catch {}
+                        ws = null;
+                    }
+                },
+                call: invokeDotNet,
+                copyText: async function (text) {
+                    if (navigator.clipboard && navigator.clipboard.writeText) {
+                        await navigator.clipboard.writeText(text);
+                        return true;
+                    }
+                    const ta = document.createElement("textarea");
+                    ta.value = text;
+                    ta.style.position = "fixed";
+                    ta.style.opacity = "0";
+                    document.body.appendChild(ta);
+                    ta.select();
+                    document.execCommand("copy");
+                    document.body.removeChild(ta);
+                    return true;
+                }
+            };
+        })();
     </script>
     <script src="_framework/blazor.webassembly#[.{fingerprint}].js"></script>
     <script>navigator.serviceWorker.register('service-worker.js', {updateViaCache: 'none'});</script>
