@@ -1,55 +1,87 @@
-<!DOCTYPE html>
+﻿<!DOCTYPE html>
 <html lang="ru">
 
 <head>
     <meta charset="utf-8" />
-    <meta content="width=device-width, initial-scale=1.0" name="viewport" />
+    <meta content="width=device-width, initial-scale=1.0"
+          name="viewport" />
     <title>Процедурный генератор баннеров</title>
     <meta
         content="Клиентский генератор стилизованных баннеров для превью стримов: 3D-заголовок, рваная плашка, процедурный гранж по seed. Весь рендер в браузере, без серверов."
         name="description" />
     <base href="/" />
 
-    <meta content="website" property="og:type" />
-    <meta content="Процедурный генератор баннеров" property="og:title" />
+    <meta content="website"
+          property="og:type" />
+    <meta content="Процедурный генератор баннеров"
+          property="og:title" />
     <meta
         content="Обложка для видео за пару кликов: 3D-заголовок, рваная плашка, гранж по seed. Рендер в браузере на Blazor + SkiaSharp, без серверов."
         property="og:description" />
-    <meta content="https://thevsakeeper.github.io/procedural-banner-generator/" property="og:url" />
-    <meta content="https://thevsakeeper.github.io/procedural-banner-generator/icon-512.png" property="og:image" />
-    <meta content="summary" name="twitter:card" />
-    <link id="webassembly" rel="preload" />
-    <link href="https://fonts.googleapis.com" rel="preconnect" />
-    <link crossorigin href="https://fonts.gstatic.com" rel="preconnect" />
+    <meta content="https://thevsakeeper.github.io/procedural-banner-generator/"
+          property="og:url" />
+    <meta content="https://thevsakeeper.github.io/procedural-banner-generator/icon-512.png"
+          property="og:image" />
+    <meta content="summary"
+          name="twitter:card" />
+    <link id="webassembly"
+          rel="preload" />
+    <link href="https://fonts.googleapis.com"
+          rel="preconnect" />
+    <link crossorigin
+          href="https://fonts.gstatic.com"
+          rel="preconnect" />
     <link
         href="https://fonts.googleapis.com/css2?family=Saira+Stencil+One&family=Saira+Condensed:wght@400;500;600;700&family=Chakra+Petch:wght@400;500;600&display=swap"
         rel="stylesheet" />
-    <link href="css/app.css" rel="stylesheet" />
-    <link href="ProceduralBannerGenerator.styles.css" rel="stylesheet" />
-    <link href="manifest.webmanifest" rel="manifest" />
-    <link href="favicon.png" rel="icon" type="image/png" />
-    <link href="icon-512.png" rel="apple-touch-icon" sizes="512x512" />
-    <link href="icon-192.png" rel="apple-touch-icon" sizes="192x192" />
-    <meta content="#b6d426" name="theme-color" />
+    <link href="css/app.css"
+          rel="stylesheet" />
+    <link href="ProceduralBannerGenerator.styles.css"
+          rel="stylesheet" />
+    <link href="manifest.webmanifest"
+          rel="manifest" />
+    <link href="favicon.png"
+          rel="icon"
+          type="image/png" />
+    <link href="icon-512.png"
+          rel="apple-touch-icon"
+          sizes="512x512" />
+    <link href="icon-192.png"
+          rel="apple-touch-icon"
+          sizes="192x192" />
+    <meta content="#b6d426"
+          name="theme-color" />
     <script type="importmap"></script>
 </head>
 
 <body>
     <div id="app">
         <svg class="loading-progress">
-            <circle cx="50%" cy="50%" r="40%" />
-            <circle cx="50%" cy="50%" r="40%" />
+            <circle cx="50%"
+                    cy="50%"
+                    r="40%" />
+            <circle cx="50%"
+                    cy="50%"
+                    r="40%" />
         </svg>
         <div class="loading-progress-text"></div>
     </div>
 
     <div id="blazor-error-ui">
         Произошла непредвиденная ошибка.
-        <a class="reload" href=".">Перезагрузить</a>
-        <span aria-hidden="true" class="dismiss" title="Закрыть">
-            <svg fill="none" height="16" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"
+        <a class="reload"
+           href=".">Перезагрузить</a>
+        <span aria-hidden="true"
+              class="dismiss"
+              title="Закрыть">
+            <svg fill="none"
+                 height="16"
+                 stroke="currentColor"
+                 stroke-linecap="round"
+                 stroke-linejoin="round"
                  stroke-width="2"
-                 viewBox="0 0 24 24" width="16">
+                 viewBox="0 0 24 24"
+                 width="16">
                 <path d="M18 6 6 18" />
                 <path d="m6 6 12 12" />
             </svg>
@@ -68,18 +100,122 @@
             let disposed = false;
 
             const toolDefs = [
-                { name: "list_templates", description: "Список всех шаблонов баннеров и активного шаблона.", inputSchema: { type: "object", properties: {} } },
-                { name: "get_template", description: "Полный JSON шаблона (spec + BannerStyle) по id/name или активного.", inputSchema: { type: "object", properties: { id: { type: "string" }, name: { type: "string" }, includePreviewPng: { type: "boolean" } } } },
-                { name: "get_style_guide", description: "Справочник всех секций и ручек стиля BannerStyle и дефолтных значений.", inputSchema: { type: "object", properties: {} } },
-                { name: "create_template", description: "Создать новый шаблон баннера (с дефолтным стилем или копией существующего) и применить spec/style.", inputSchema: { type: "object", properties: { name: { type: "string" }, baseTemplateId: { type: "string" }, baseTemplateName: { type: "string" }, activate: { type: "boolean" }, spec: { type: "object" }, style: { type: "object" } } } },
-                { name: "update_template", description: "Частично или полностью обновить spec и style шаблона (достаточно передать только меняемые ручки) и перерисовать превью.", inputSchema: { type: "object", properties: { id: { type: "string" }, name: { type: "string" }, newName: { type: "string" }, summary: { type: "string" }, activate: { type: "boolean" }, spec: { type: "object" }, style: { type: "object" } } } },
-                { name: "undo_template", description: "Откатить изменения шаблона по истории шагов на 1 или несколько шагов назад.", inputSchema: { type: "object", properties: { id: { type: "string" }, name: { type: "string" }, steps: { type: "integer" }, includePreviewPng: { type: "boolean" } } } },
-                { name: "duplicate_template", description: "Дублировать шаблон под новым именем.", inputSchema: { type: "object", properties: { id: { type: "string" }, name: { type: "string" }, newName: { type: "string" }, activate: { type: "boolean" } } } },
-                { name: "rename_template", description: "Переименовать шаблон.", inputSchema: { type: "object", properties: { id: { type: "string" }, name: { type: "string" }, newName: { type: "string" } }, required: ["newName"] } },
-                { name: "delete_template", description: "Удалить шаблон по id или имени.", inputSchema: { type: "object", properties: { id: { type: "string" }, name: { type: "string" } } } },
-                { name: "set_active_template", description: "Сделать шаблон активным на экране.", inputSchema: { type: "object", properties: { id: { type: "string" }, name: { type: "string" } } } },
-                { name: "reset_template_style", description: "Сбросить стиль шаблона к значениям по умолчанию.", inputSchema: { type: "object", properties: { id: { type: "string" }, name: { type: "string" } } } },
-                { name: "render_banner", description: "Отрендерить PNG баннера для шаблона (с опциональными переопределениями spec/style).", inputSchema: { type: "object", properties: { id: { type: "string" }, name: { type: "string" }, spec: { type: "object" }, style: { type: "object" } } } }
+                {
+                    name: "list_templates",
+                    description: "Список всех шаблонов баннеров и активного шаблона.",
+                    inputSchema: { type: "object", properties: {} }
+                },
+                {
+                    name: "get_template",
+                    description: "Полный JSON шаблона (spec + BannerStyle) по id/name или активного.",
+                    inputSchema: {
+                        type: "object",
+                        properties: {
+                            id: { type: "string" },
+                            name: { type: "string" },
+                            includePreviewPng: { type: "boolean" }
+                        }
+                    }
+                },
+                {
+                    name: "get_style_guide",
+                    description: "Справочник всех секций и ручек стиля BannerStyle и дефолтных значений.",
+                    inputSchema: { type: "object", properties: {} }
+                },
+                {
+                    name: "create_template",
+                    description: "Создать новый шаблон баннера (с дефолтным стилем или копией существующего) и применить spec/style.",
+                    inputSchema: {
+                        type: "object",
+                        properties: {
+                            name: { type: "string" },
+                            baseTemplateId: { type: "string" },
+                            baseTemplateName: { type: "string" },
+                            activate: { type: "boolean" },
+                            spec: { type: "object" },
+                            style: { type: "object" }
+                        }
+                    }
+                },
+                {
+                    name: "update_template",
+                    description: "Частично или полностью обновить spec и style шаблона (достаточно передать только меняемые ручки) и перерисовать превью.",
+                    inputSchema: {
+                        type: "object",
+                        properties: {
+                            id: { type: "string" },
+                            name: { type: "string" },
+                            newName: { type: "string" },
+                            summary: { type: "string" },
+                            activate: { type: "boolean" },
+                            spec: { type: "object" },
+                            style: { type: "object" }
+                        }
+                    }
+                },
+                {
+                    name: "undo_template",
+                    description: "Откатить изменения шаблона по истории шагов на 1 или несколько шагов назад.",
+                    inputSchema: {
+                        type: "object",
+                        properties: {
+                            id: { type: "string" },
+                            name: { type: "string" },
+                            steps: { type: "integer" },
+                            includePreviewPng: { type: "boolean" }
+                        }
+                    }
+                },
+                {
+                    name: "duplicate_template",
+                    description: "Дублировать шаблон под новым именем.",
+                    inputSchema: {
+                        type: "object",
+                        properties: {
+                            id: { type: "string" },
+                            name: { type: "string" },
+                            newName: { type: "string" },
+                            activate: { type: "boolean" }
+                        }
+                    }
+                },
+                {
+                    name: "rename_template",
+                    description: "Переименовать шаблон.",
+                    inputSchema: {
+                        type: "object",
+                        properties: { id: { type: "string" }, name: { type: "string" }, newName: { type: "string" } },
+                        required: ["newName"]
+                    }
+                },
+                {
+                    name: "delete_template",
+                    description: "Удалить шаблон по id или имени.",
+                    inputSchema: { type: "object", properties: { id: { type: "string" }, name: { type: "string" } } }
+                },
+                {
+                    name: "set_active_template",
+                    description: "Сделать шаблон активным на экране.",
+                    inputSchema: { type: "object", properties: { id: { type: "string" }, name: { type: "string" } } }
+                },
+                {
+                    name: "reset_template_style",
+                    description: "Сбросить стиль шаблона к значениям по умолчанию.",
+                    inputSchema: { type: "object", properties: { id: { type: "string" }, name: { type: "string" } } }
+                },
+                {
+                    name: "render_banner",
+                    description: "Отрендерить PNG баннера для шаблона (с опциональными переопределениями spec/style).",
+                    inputSchema: {
+                        type: "object",
+                        properties: {
+                            id: { type: "string" },
+                            name: { type: "string" },
+                            spec: { type: "object" },
+                            style: { type: "object" }
+                        }
+                    }
+                }
             ];
 
             async function invokeDotNet(tool, args) {
@@ -100,7 +236,7 @@
                                 name: t.name,
                                 description: t.description,
                                 inputSchema: t.inputSchema,
-                                execute: async (args) => await invokeDotNet(t.name, args)
+                                execute: async args => await invokeDotNet(t.name, args)
                             });
                         }
                     }
@@ -111,7 +247,8 @@
 
             function notifyStatus(connected) {
                 if (!dotNetRef) return;
-                dotNetRef.invokeMethodAsync("OnMcpConnectionChanged", connected).catch(() => {});
+                dotNetRef.invokeMethodAsync("OnMcpConnectionChanged", connected).catch(() => {
+                });
             }
 
             function scheduleReconnect() {
@@ -138,20 +275,25 @@
                                 token: authToken,
                                 url: location.href
                             }));
-                        } catch {}
+                        } catch {
+                        }
                     };
                     ws.onmessage = async function (ev) {
                         let msg;
-                        try { msg = JSON.parse(ev.data); } catch { return; }
+                        try {
+                            msg = JSON.parse(ev.data);
+                        } catch {
+                            return;
+                        }
                         if (!msg || !msg.id || !msg.tool) return;
                         try {
                             const result = await invokeDotNet(msg.tool, msg.args || {});
                             if (ws && ws.readyState === WebSocket.OPEN) {
-                                ws.send(JSON.stringify({ id: msg.id, result: result }));
+                                ws.send(JSON.stringify({ id: msg.id, result }));
                             }
                         } catch (err) {
                             if (ws && ws.readyState === WebSocket.OPEN) {
-                                ws.send(JSON.stringify({ id: msg.id, error: String((err && err.message) || err) }));
+                                ws.send(JSON.stringify({ id: msg.id, error: String(err && err.message || err) }));
                             }
                         }
                     };
@@ -160,7 +302,10 @@
                         scheduleReconnect();
                     };
                     ws.onerror = function () {
-                        try { ws.close(); } catch {}
+                        try {
+                            ws.close();
+                        } catch {
+                        }
                     };
                 } catch {
                     notifyStatus(false);
@@ -169,7 +314,7 @@
             }
 
             return {
-                bind: function (ref, wsUrl, token) {
+                bind(ref, wsUrl, token) {
                     disposed = false;
                     dotNetRef = ref;
                     if (wsUrl) targetWsUrl = wsUrl;
@@ -177,7 +322,7 @@
                     registerWebMcp();
                     connectWs();
                 },
-                unbind: function () {
+                unbind() {
                     disposed = true;
                     dotNetRef = null;
                     if (reconnectTimer) {
@@ -185,12 +330,15 @@
                         reconnectTimer = null;
                     }
                     if (ws) {
-                        try { ws.close(); } catch {}
+                        try {
+                            ws.close();
+                        } catch {
+                        }
                         ws = null;
                     }
                 },
                 call: invokeDotNet,
-                copyText: async function (text) {
+                async copyText(text) {
                     if (navigator.clipboard && navigator.clipboard.writeText) {
                         await navigator.clipboard.writeText(text);
                         return true;
@@ -209,7 +357,7 @@
         })();
     </script>
     <script src="_framework/blazor.webassembly#[.{fingerprint}].js"></script>
-    <script>navigator.serviceWorker.register('service-worker.js', {updateViaCache: 'none'});</script>
+    <script>navigator.serviceWorker.register('service-worker.js', { updateViaCache: 'none' });</script>
 </body>
 
 </html>

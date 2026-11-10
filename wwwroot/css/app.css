@@ -1,4 +1,4 @@
-:root {
+﻿:root {
     --bg: #0a0c07;
     --bg-2: #0f1209;
     --panel: #14180d;
@@ -403,11 +403,11 @@ button:disabled {
 .mcp-bar {
     display: flex;
     align-items: center;
-    justify-content: space-between;
     flex-wrap: wrap;
-    gap: 0.6rem;
+    justify-content: space-between;
     padding-top: 0.55rem;
     border-top: 1px dashed var(--line-bright);
+    gap: 0.6rem;
 }
 
 .mcp-status {
@@ -439,16 +439,16 @@ button:disabled {
 }
 
 .mcp-details {
-    border-top: 1px solid var(--line);
     padding-top: 0.35rem;
+    border-top: 1px solid var(--line);
 }
 
 .mcp-details > summary {
     font-family: var(--font-body);
     font-size: 0.78rem;
     font-weight: 500;
-    cursor: pointer;
     list-style: none;
+    cursor: pointer;
     letter-spacing: 0.1em;
     text-transform: uppercase;
     color: var(--bone-dim);
@@ -482,11 +482,11 @@ button:disabled {
 
 .history-list {
     display: flex;
+    overflow-y: auto;
     flex-direction: column;
     max-height: 220px;
     margin-top: 0.45rem;
     padding: 0.35rem 0.45rem;
-    overflow-y: auto;
     border: 1px solid var(--line-bright);
     background: var(--bg-2);
     gap: 0.25rem;
@@ -771,8 +771,8 @@ button:disabled {
 .hint {
     font-family: var(--font-body);
     font-size: 0.78rem;
-    color: var(--bone-dim);
     margin: 0.2rem 0 0.55rem;
+    color: var(--bone-dim);
 }
 
 input[type=checkbox] {
@@ -808,8 +808,8 @@ input[type=checkbox] {
     }
 
     .prow .pname {
-        grid-column: 1 / -1;
         margin-bottom: 0.1rem;
+        grid-column: 1 / -1;
     }
 }
 

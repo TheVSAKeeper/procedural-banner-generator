@@ -1,0 +1,97 @@
+﻿<div class="stage">
+    <section class="monitor">
+        <span class="module-head">Выходной кадр</span>
+        <div class="monitor-screen">
+            @if (ImageSrc is not null)
+            {
+                <img class="preview"
+                     src="@ImageSrc"
+                     alt="Баннер" />
+            }
+            else
+            {
+                <div class="monitor-empty">– нет сигнала –</div>
+            }
+        </div>
+        @if (!IsReady)
+        {
+            <p class="status"
+               role="status"
+               aria-live="polite">Инициализация шрифта…</p>
+        }
+        else if (Error is not null)
+        {
+            <p class="status err"
+               role="alert">@Error</p>
+        }
+        else if (Notice is not null)
+        {
+            <p class="status"
+               role="status"
+               aria-live="polite">@Notice</p>
+        }
+    </section>
+
+    <section class="toolbar">
+        <span class="module-head">Действия</span>
+        <div class="actions">
+            <button type="button"
+                    @onclick="OnRender"
+                    disabled="@(!IsReady)"
+                    title="Перерисовать баннер с текущими параметрами">
+                <Icon Name="play" />
+                Сгенерировать
+            </button>
+            <button type="button"
+                    class="btn-ghost"
+                    @onclick="OnRandomize"
+                    disabled="@(!IsReady)"
+                    title="Новый случайный seed – меняет рисунок потёртостей и брызг">
+                <Icon Name="dices" />
+                Случайный вид
+            </button>
+            <button type="button"
+                    class="btn-ghost"
+                    @onclick="OnUndoLastStep"
+                    disabled="@(!IsReady || History.Count == 0)"
+                    title="@(History.Count > 0 ? $"Откатить: {History[^1].Label}" : "История изменений этого шаблона пуста")">
+                <Icon Name="undo" />
+                Откатить @(History.Count > 0 ? $"({History.Count})" : "")
+            </button>
+            <button type="button"
+                    class="btn-danger"
+                    @onclick="OnResetStyle"
+                    disabled="@(!IsReady)"
+                    title="Вернуть все настройки стиля к значениям по умолчанию">
+                <Icon Name="rotate-ccw" />
+                Сбросить стиль
+            </button>
+            @if (ImageSrc is not null)
+            {
+                <a class="btn btn-ghost"
+                   download="banner.png"
+                   href="@ImageSrc"
+                   title="Скачать готовый баннер картинкой PNG">
+                    <Icon Name="download" />
+                    Скачать PNG</a>
+            }
+            @if (ExportHref is not null)
+            {
+                <a class="btn btn-ghost"
+                   download="banner-style.json"
+                   href="@ExportHref"
+                   title="Сохранить текущие настройки стиля в файл JSON">
+                    <Icon Name="save" />
+                    Сохранить стиль</a>
+            }
+            <label class="btn btn-ghost"
+                   title="Загрузить настройки стиля из ранее сохранённого файла JSON">
+                <Icon Name="upload" />
+                Загрузить стиль
+                <InputFile OnChange="OnImportStyle"
+                           accept=".json,application/json"
+                           class="visually-hidden-file" />
+            </label>
+        </div>
+    </section>
+</div>

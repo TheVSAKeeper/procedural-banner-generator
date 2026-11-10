@@ -1,0 +1,96 @@
+﻿<section class="panel">
+    <span class="module-head">Профиль стиля</span>
+    <div class="grid">
+        <label>Активный профиль
+            <select @onchange="HandleProfileSelected"
+                    title="Профиль стиля – отдельный сохранённый шаблон оформления баннера.">
+                @foreach (var p in Profiles)
+                {
+                    <option @key="p.Id"
+                            value="@p.Id"
+                            selected="@(p.Id == ActiveId)">@p.Name</option>
+                }
+            </select>
+        </label>
+        <div class="actions">
+            <button type="button"
+                    class="btn-ghost"
+                    @onclick="OnNewProfile"
+                    title="Новый пустой профиль">
+                <Icon Name="plus" />
+                Новый
+            </button>
+            <button type="button"
+                    class="btn-ghost"
+                    @onclick="OnRenameProfile"
+                    title="Переименовать профиль">
+                <Icon Name="pencil" />
+                Переименовать
+            </button>
+            <button type="button"
+                    class="btn-ghost"
+                    @onclick="OnDuplicateProfile"
+                    title="Скопировать профиль">
+                <Icon Name="copy" />
+                Дублировать
+            </button>
+            <button type="button"
+                    class="btn-danger"
+                    @onclick="OnDeleteProfile"
+                    disabled="@(Profiles.Count <= 1)"
+                    title="Удалить профиль (последний удалить нельзя)">
+                <Icon Name="trash-2" />
+                Удалить
+            </button>
+        </div>
+        <div class="mcp-bar">
+            <span class="mcp-status @(McpConnected ? "live" : null)"
+                  title="Статус локального MCP-моста (ws://127.0.0.1:5219/ws)">
+                <span class="mcp-dot"></span>
+                @(McpConnected ? "MCP: мост подключён" : "MCP: ожидание моста")
+            </span>
+            <button type="button"
+                    class="btn"
+                    @onclick="OnCopyAgentPrompt"
+                    title="Скопировать промпт в буфер обмена и вставить в любого агента (Claude Code, Codex, Cursor, Antigravity) для подключения по MCP">
+                <Icon Name="@(PromptCopied ? "check" : "terminal")" />
+                @(PromptCopied ? "Промпт скопирован" : "Промпт для агента (MCP)")
+            </button>
+        </div>
+        <details class="mcp-details">
+            <summary>Показать промпт установки MCP</summary>
+            <textarea class="mcp-prompt-view"
+                      rows="6"
+                      readonly
+                      value="@AgentPrompt"></textarea>
+        </details>
+        @if (History.Count > 0)
+        {
+            <details class="mcp-details">
+                <summary>История шагов (@History.Count)</summary>
+                <div class="history-list">
+                    @for (var i = History.Count - 1; i >= 0; i--)
+                    {
+                        var stepsBack = History.Count - i;
+                        var step = History[i];
+                        <div @key="step"
+                             class="history-row">
+                            <div class="history-meta"
+                                 title="@step.Label">
+                                <span class="history-label">@step.Label</span>
+                                <span class="history-time">шаг –@stepsBack · @step.Timestamp</span>
+                            </div>
+                            <button type="button"
+                                    class="btn-ghost history-btn"
+                                    @onclick="() => OnUndoSteps.InvokeAsync(stepsBack)"
+                                    title="Откатить до состояния перед этим шагом">
+                                <Icon Name="undo" />
+                                Вернуть
+                            </button>
+                        </div>
+                    }
+                </div>
+            </details>
+        }
+    </div>
+</section>

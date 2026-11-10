@@ -1,0 +1,45 @@
+﻿<section class="panel">
+    <span class="module-head">Параметры выпуска</span>
+    <div class="grid">
+        <label>Заголовок<input @bind:get="Title"
+                               @bind:set="OnTitleInput"
+                               placeholder="290. ЛЕДОКОЛ XIX" /></label>
+        <label>Подзаголовок<input @bind:get="Subtitle"
+                                  @bind:set="OnSubtitleInput"
+                                  placeholder="КОРОЛЬ МАШИННОГО ЗАЛА" /></label>
+        <label>Третья строка<input @bind:get="Tagline"
+                                   @bind:set="OnTaglineInput"
+                                   placeholder="ник / дата / тег (необязательно)" /></label>
+        <div class="row">
+            <label class="sm">Seed<input type="number"
+                                         @bind:get="Seed"
+                                         @bind:set="OnSeedInput" /></label>
+            <label class="sm">Ширина<input type="number"
+                                           min="320"
+                                           max="3840"
+                                           @bind:get="Width"
+                                           @bind:set="OnWidthInput" /></label>
+            <label class="sm">Высота<input type="number"
+                                           min="180"
+                                           max="2160"
+                                           @bind:get="Height"
+                                           @bind:set="OnHeightInput" /></label>
+        </div>
+        <div class="row">
+            <label class="sm">Задержка отрисовки, мс<input type="number"
+                                                           @bind:get="RenderDebounceMs"
+                                                           @bind:set="RenderDebounceMsChanged.InvokeAsync"
+                                                           min="0"
+                                                           max="3000"
+                                                           step="10" /></label>
+            <button type="button"
+                    class="toggle @(Transparent ? "on" : null)"
+                    @onclick="ToggleTransparent"
+                    aria-pressed="@Transparent"
+                    title="Прозрачный фон вместо подложки-градиента">
+                <Icon Name="@(Transparent ? "square-check" : "square")" />
+                Фон
+            </button>
+        </div>
+    </div>
+</section>

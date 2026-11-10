@@ -1,4 +1,4 @@
-#!/usr/bin/env node
+﻿#!/usr/bin/env node
 // Локальный MCP-мост для процедурного генератора баннеров.
 // Работает без внешних npm-зависимостей (только встроенные модули Node.js).
 // Режимы запуска:
@@ -99,8 +99,8 @@ function initAuthFromCli(argv) {
         cli.token && cli.token.length >= 16
             ? cli.token
             : fileData.token && fileData.token.length >= 16
-              ? fileData.token
-              : crypto.randomBytes(24).toString('hex');
+                ? fileData.token
+                : crypto.randomBytes(24).toString('hex');
 
     const origins = [...fileData.origins];
     for (const o of cli.origins) {
@@ -176,14 +176,12 @@ function extractRequestToken(req, url) {
 function isAllowedHost(hostHeader) {
     if (!hostHeader || typeof hostHeader !== 'string') return false;
     const h = hostHeader.trim().toLowerCase();
-    return (
-        h === '127.0.0.1' ||
+    return h === '127.0.0.1' ||
         h === 'localhost' ||
         h === '[::1]' ||
         h === `127.0.0.1:${PORT}` ||
         h === `localhost:${PORT}` ||
-        h === `[::1]:${PORT}`
-    );
+        h === `[::1]:${PORT}`;
 }
 
 const TOOLS = [
@@ -204,7 +202,10 @@ const TOOLS = [
             properties: {
                 id: { type: 'string', description: 'ID шаблона (необязательно)' },
                 name: { type: 'string', description: 'Имя шаблона (необязательно)' },
-                includePreviewPng: { type: 'boolean', description: 'Приложить ли отрендеренный PNG баннера (по умолчанию false)' },
+                includePreviewPng: {
+                    type: 'boolean',
+                    description: 'Приложить ли отрендеренный PNG баннера (по умолчанию false)'
+                },
             },
             additionalProperties: false,
         },
@@ -225,15 +226,27 @@ const TOOLS = [
             type: 'object',
             properties: {
                 name: { type: 'string', description: 'Имя нового шаблона' },
-                baseTemplateId: { type: 'string', description: 'ID шаблона-основы для копирования (если не задан – дефолтный стиль)' },
-                baseTemplateName: { type: 'string', description: 'Имя шаблона-основы для копирования (если не задан – дефолтный стиль)' },
-                activate: { type: 'boolean', description: 'Сделать созданный шаблон активным на экране (по умолчанию true)' },
+                baseTemplateId: {
+                    type: 'string',
+                    description: 'ID шаблона-основы для копирования (если не задан – дефолтный стиль)'
+                },
+                baseTemplateName: {
+                    type: 'string',
+                    description: 'Имя шаблона-основы для копирования (если не задан – дефолтный стиль)'
+                },
+                activate: {
+                    type: 'boolean',
+                    description: 'Сделать созданный шаблон активным на экране (по умолчанию true)'
+                },
                 includePreviewPng: { type: 'boolean', description: 'Вернуть отрендеренный PNG (по умолчанию true)' },
                 spec: {
                     type: 'object',
                     description: 'Параметры выпуска (можно передать только меняемые поля)',
                     properties: {
-                        title: { type: 'string', description: 'Заголовок (ведущий номер вида "290." рисуется зелёным 3D)' },
+                        title: {
+                            type: 'string',
+                            description: 'Заголовок (ведущий номер вида "290." рисуется зелёным 3D)'
+                        },
                         subtitle: { type: 'string', description: 'Подзаголовок на полосе' },
                         tagline: { type: 'string', description: 'Третья строка под подзаголовком' },
                         seed: { type: 'integer', description: 'Seed процедурного гранжа' },
@@ -260,7 +273,10 @@ const TOOLS = [
                 name: { type: 'string', description: 'Имя шаблона (если ищем по имени)' },
                 newName: { type: 'string', description: 'Новое имя шаблона, если нужно переименовать' },
                 summary: { type: 'string', description: 'Краткое описание правки для истории шагов (необязательно)' },
-                activate: { type: 'boolean', description: 'Переключить экран сайта на этот шаблон (по умолчанию true)' },
+                activate: {
+                    type: 'boolean',
+                    description: 'Переключить экран сайта на этот шаблон (по умолчанию true)'
+                },
                 includePreviewPng: { type: 'boolean', description: 'Вернуть отрендеренный PNG (по умолчанию true)' },
                 spec: {
                     type: 'object',
@@ -331,7 +347,10 @@ const TOOLS = [
             properties: {
                 id: { type: 'string', description: 'ID шаблона' },
                 name: { type: 'string', description: 'Имя шаблона' },
-                includePreviewPng: { type: 'boolean', description: 'Вернуть отрендеренный PNG выбранного шаблона (по умолчанию true)' },
+                includePreviewPng: {
+                    type: 'boolean',
+                    description: 'Вернуть отрендеренный PNG выбранного шаблона (по умолчанию true)'
+                },
             },
             additionalProperties: false,
         },
@@ -345,7 +364,10 @@ const TOOLS = [
                 id: { type: 'string', description: 'ID шаблона (по умолчанию – активный)' },
                 name: { type: 'string', description: 'Имя шаблона' },
                 steps: { type: 'integer', description: 'На сколько шагов назад откатить (по умолчанию 1)' },
-                includePreviewPng: { type: 'boolean', description: 'Вернуть отрендеренный PNG после отката (по умолчанию true)' },
+                includePreviewPng: {
+                    type: 'boolean',
+                    description: 'Вернуть отрендеренный PNG после отката (по умолчанию true)'
+                },
             },
             additionalProperties: false,
         },
@@ -441,7 +463,7 @@ function attachWsClient(socket) {
     };
     clients.add(client);
 
-    socket.on('data', (chunk) => {
+    socket.on('data', chunk => {
         try {
             const maxAllowed = client.verified ? MAX_WS_MESSAGE_BYTES : MAX_WS_HELLO_BYTES;
             if (client.buffer.length + chunk.length > maxAllowed + 14) {
@@ -627,7 +649,7 @@ async function waitForActiveClient(timeoutMs = 4000) {
 
     const deadline = Date.now() + timeoutMs;
     while (Date.now() < deadline) {
-        await new Promise((r) => setTimeout(r, 150));
+        await new Promise(r => setTimeout(r, 150));
         const c = pick();
         if (c) return c;
     }
@@ -679,9 +701,9 @@ function httpJsonRequest(method, urlPath, bodyObj, timeoutMs = 28000) {
                 headers,
                 timeout: timeoutMs,
             },
-            (res) => {
+            res => {
                 const chunks = [];
-                res.on('data', (c) => chunks.push(c));
+                res.on('data', c => chunks.push(c));
                 res.on('end', () => {
                     const text = Buffer.concat(chunks).toString('utf8');
                     try {
@@ -692,9 +714,7 @@ function httpJsonRequest(method, urlPath, bodyObj, timeoutMs = 28000) {
                 });
             }
         );
-        req.on('timeout', () => {
-            req.destroy(new Error('HTTP timeout'));
-        });
+        req.on('timeout', () => req.destroy(new Error('HTTP timeout')));
         req.on('error', reject);
         if (payload) req.write(payload);
         req.end();
@@ -709,7 +729,7 @@ async function invokeTool(tool, args) {
     }
     const resp = await httpJsonRequest('POST', '/rpc', { tool, args: args || {} });
     if (!resp.data || !resp.data.ok) {
-        throw new Error((resp.data && resp.data.error) || `Ошибка вызова ${tool} через локальный мост`);
+        throw new Error(resp.data && resp.data.error || `Ошибка вызова ${tool} через локальный мост`);
     }
     return resp.data.result;
 }
@@ -752,7 +772,7 @@ async function handleMcpJsonRpc(msg) {
 
     try {
         if (method === 'initialize') {
-            const clientVersion = (params && params.protocolVersion) || '2024-11-05';
+            const clientVersion = params && params.protocolVersion || '2024-11-05';
             return {
                 jsonrpc: '2.0',
                 id,
@@ -785,8 +805,8 @@ async function handleMcpJsonRpc(msg) {
 
         if (method === 'tools/call') {
             const toolName = params && params.name;
-            const toolArgs = (params && params.arguments) || {};
-            if (!toolName || !TOOLS.some((t) => t.name === toolName)) {
+            const toolArgs = params && params.arguments || {};
+            if (!toolName || !TOOLS.some(t => t.name === toolName)) {
                 return {
                     jsonrpc: '2.0',
                     id,
@@ -862,7 +882,7 @@ function readHttpBody(req, maxBytes = MAX_HTTP_BODY_BYTES) {
         const chunks = [];
         let total = 0;
         let tooLarge = false;
-        req.on('data', (c) => {
+        req.on('data', c => {
             if (tooLarge) return;
             total += c.length;
             if (total > maxBytes) {
@@ -882,7 +902,7 @@ function readHttpBody(req, maxBytes = MAX_HTTP_BODY_BYTES) {
 }
 
 function startHubServer() {
-    return new Promise((resolve) => {
+    return new Promise(resolve => {
         const server = http.createServer(async (req, res) => {
             if (!isAllowedHost(req.headers.host)) {
                 res.writeHead(403, { 'Content-Type': 'application/json; charset=utf-8' });
@@ -912,7 +932,7 @@ function startHubServer() {
                     res.end(JSON.stringify({ ok: false, error: 'Unauthorized' }));
                     return;
                 }
-                const active = [...clients].filter((c) => !c.socket.destroyed && c.verified);
+                const active = [...clients].filter(c => !c.socket.destroyed && c.verified);
                 res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
                 res.end(
                     JSON.stringify({
@@ -951,7 +971,7 @@ function startHubServer() {
                 } catch (err) {
                     const status = err && err.statusCode === 413 ? 413 : 200;
                     res.writeHead(status, { 'Content-Type': 'application/json; charset=utf-8' });
-                    res.end(JSON.stringify({ ok: false, error: String((err && err.message) || err) }));
+                    res.end(JSON.stringify({ ok: false, error: String(err && err.message || err) }));
                 }
                 return;
             }
@@ -976,7 +996,7 @@ function startHubServer() {
                         JSON.stringify({
                             jsonrpc: '2.0',
                             id: null,
-                            error: { code, message: String((err && err.message) || err) },
+                            error: { code, message: String(err && err.message || err) },
                         })
                     );
                 }
@@ -1001,7 +1021,7 @@ function startHubServer() {
             if (
                 !key ||
                 url.pathname !== '/ws' ||
-                (req.headers.origin && !isAllowedBrowserOrigin(req.headers.origin)) ||
+                req.headers.origin && !isAllowedBrowserOrigin(req.headers.origin) ||
                 !isValidToken(extractRequestToken(req, url))
             ) {
                 socket.destroy();
@@ -1023,7 +1043,7 @@ function startHubServer() {
             attachWsClient(socket);
         });
 
-        server.on('error', (err) => {
+        server.on('error', err => {
             if (err && err.code === 'EADDRINUSE') {
                 isHubOwner = false;
                 resolve({ started: false, server: null });
@@ -1044,7 +1064,7 @@ function startStdioMcpLoop() {
     let buffer = Buffer.alloc(0);
     let useContentLength = false;
 
-    const writeReply = (obj) => {
+    const writeReply = obj => {
         if (!obj) return;
         const json = JSON.stringify(obj);
         if (useContentLength) {
@@ -1055,7 +1075,7 @@ function startStdioMcpLoop() {
         }
     };
 
-    process.stdin.on('data', async (chunk) => {
+    process.stdin.on('data', async chunk => {
         if (buffer.length + chunk.length > MAX_STDIO_MESSAGE_BYTES) {
             buffer = Buffer.alloc(0);
             writeReply({ jsonrpc: '2.0', id: null, error: { code: -32600, message: 'Message too large' } });
@@ -1132,7 +1152,7 @@ async function ensureDaemonRunning() {
 
     const deadline = Date.now() + 4000;
     while (Date.now() < deadline) {
-        await new Promise((r) => setTimeout(r, 150));
+        await new Promise(r => setTimeout(r, 150));
         try {
             const health = await httpJsonRequest('GET', '/health', null, 1000);
             if (health.status === 200 && health.data && health.data.ok) {
@@ -1157,7 +1177,8 @@ async function main() {
             process.exit(0);
         }
         // Держим процесс живым как WebSocket/HTTP-хаб
-        setInterval(() => {}, 60000);
+        setInterval(() => {
+        }, 60000);
         return;
     }
 
@@ -1167,7 +1188,7 @@ async function main() {
         if (status.connectedClients === 0) {
             const waitEnd = Date.now() + 2000;
             while (Date.now() < waitEnd) {
-                await new Promise((r) => setTimeout(r, 250));
+                await new Promise(r => setTimeout(r, 250));
                 const check = await httpJsonRequest('GET', '/health', null, 1000).catch(() => null);
                 if (check && check.data && check.data.connectedClients > 0) {
                     console.log(
@@ -1304,7 +1325,7 @@ async function main() {
     startStdioMcpLoop();
 }
 
-main().catch((err) => {
+main().catch(err => {
     console.error(err);
     process.exit(1);
 });
