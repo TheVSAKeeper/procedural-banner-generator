@@ -40,8 +40,137 @@ public sealed record BannerStyle
 
     public static BannerStyle FromJson(string json)
     {
-        return JsonSerializer.Deserialize<BannerStyle>(json, JsonOptions)
-               ?? throw new InvalidOperationException("Пустой JSON стиля");
+        var style = JsonSerializer.Deserialize<BannerStyle>(json, JsonOptions)
+                    ?? throw new InvalidOperationException("Пустой JSON стиля");
+        style.Validate();
+        return style;
+    }
+
+    public void Validate()
+    {
+        if (Palette is null || Layout is null || TitleFx is null || Plate is null
+            || Smear is null || Band is null || Accents is null || Tagline is null
+            || Logo is null || Background is null)
+        {
+            throw new InvalidOperationException("Секции стиля не могут быть пустыми (null).");
+        }
+
+        StyleColor.Parse(Palette.GreenFaceTop);
+        StyleColor.Parse(Palette.GreenFaceMid);
+        StyleColor.Parse(Palette.GreenFaceBottom);
+        StyleColor.Parse(Palette.GreenExtrude);
+        StyleColor.Parse(Palette.WhiteFaceTop);
+        StyleColor.Parse(Palette.WhiteFaceMid);
+        StyleColor.Parse(Palette.WhiteFaceBottom);
+        StyleColor.Parse(Palette.WhiteExtrude);
+        StyleColor.Parse(Palette.BandTop);
+        StyleColor.Parse(Palette.BandBottom);
+        StyleColor.Parse(Palette.Smear);
+        StyleColor.Parse(Palette.Plate);
+        StyleColor.Parse(Palette.SubtitleText);
+        StyleColor.Parse(Palette.TitleStroke);
+        StyleColor.Parse(Palette.Chips);
+        StyleColor.Parse(Palette.DarkSplatter);
+        StyleColor.Parse(TitleFx.MainMottleColor);
+        StyleColor.Parse(TitleFx.PrefixMottleColor);
+        StyleColor.Parse(Plate.MottleColor);
+        StyleColor.Parse(Smear.MottleColor);
+        StyleColor.Parse(Band.MottleColor);
+        StyleColor.Parse(Tagline.Color);
+
+        CheckRange(Layout.TitleSizeFraction, 0f, 0.5f, "layout.titleSizeFraction");
+        CheckRange(Layout.MaxTitleWidthFraction, 0.05f, 1f, "layout.maxTitleWidthFraction");
+        CheckRange(Layout.TitleScaleX, 0.1f, 3f, "layout.titleScaleX");
+        CheckRange(Layout.TitleBaselineFraction, -0.5f, 1.5f, "layout.titleBaselineFraction");
+        CheckRange(Layout.SubtitleSizeFactor, 0.05f, 2f, "layout.subtitleSizeFactor");
+        CheckRange(Layout.SubtitleScaleX, 0.1f, 3f, "layout.subtitleScaleX");
+        CheckRange(Layout.SubtitleBaselineOffsetFactor, -2f, 4f, "layout.subtitleBaselineOffsetFactor");
+        CheckRange(Layout.RotationDegrees, -45f, 45f, "layout.rotationDegrees");
+        CheckRange(Layout.PlateSidePaddingFactor, 0f, 3f, "layout.plateSidePaddingFactor");
+        CheckRange(Layout.PlateTopPaddingFactor, 0f, 3f, "layout.plateTopPaddingFactor");
+        CheckRange(Layout.PlateBottomFactor, 0f, 4f, "layout.plateBottomFactor");
+        CheckRange(Layout.BandHeightFactor, 0f, 5f, "layout.bandHeightFactor");
+        CheckRange(Layout.BandLeftPaddingFactor, 0f, 5f, "layout.bandLeftPaddingFactor");
+        CheckRange(Layout.BandRightPaddingFactor, 0f, 5f, "layout.bandRightPaddingFactor");
+
+        CheckRange(TitleFx.ExtrudeDepthFactor, 0f, 0.5f, "titleFx.extrudeDepthFactor");
+        CheckRange(TitleFx.ExtrudeStepX, -5f, 5f, "titleFx.extrudeStepX");
+        CheckRange(TitleFx.StrokeWidthFactor, 0f, 0.5f, "titleFx.strokeWidthFactor");
+        CheckRange(TitleFx.FaceGradientMidStop, 0f, 1f, "titleFx.faceGradientMidStop");
+        CheckRange(TitleFx.MottleDensity, 0f, 10f, "titleFx.mottleDensity");
+        CheckRange(TitleFx.MottleMaxRadiusFactor, 0f, 2f, "titleFx.mottleMaxRadiusFactor");
+        CheckRange(TitleFx.DistressDensity, 0f, 10f, "titleFx.distressDensity");
+
+        CheckRange(Plate.EdgeAmpFactor, 0f, 1f, "plate.edgeAmpFactor");
+        CheckRange(Plate.EndAmpFactor, 0f, 1f, "plate.endAmpFactor");
+        CheckRange(Plate.TeethLeftFactor, 0f, 3f, "plate.teethLeftFactor");
+        CheckRange(Plate.TeethRightFactor, 0f, 3f, "plate.teethRightFactor");
+        CheckRange(Plate.MottleCount, 0, 200, "plate.mottleCount");
+        CheckRange(Plate.MottleMaxRadiusFactor, 0f, 3f, "plate.mottleMaxRadiusFactor");
+        CheckRange(Plate.DistressDensity, 0f, 10f, "plate.distressDensity");
+        CheckRange(Plate.ShadowOffsetY, -100f, 100f, "plate.shadowOffsetY");
+        CheckRange(Plate.ShadowBlur, 0f, 100f, "plate.shadowBlur");
+        CheckRange(Plate.ShadowAlpha, 0, 255, "plate.shadowAlpha");
+
+        CheckRange(Smear.LeftExtendFactor, 0f, 5f, "smear.leftExtendFactor");
+        CheckRange(Smear.TopExtendFactor, 0f, 3f, "smear.topExtendFactor");
+        CheckRange(Smear.RightPadFactor, 0f, 3f, "smear.rightPadFactor");
+        CheckRange(Smear.BaselineDropFactor, 0f, 3f, "smear.baselineDropFactor");
+        CheckRange(Smear.EdgeAmpFactor, 0f, 1f, "smear.edgeAmpFactor");
+        CheckRange(Smear.EndAmpFactor, 0f, 1f, "smear.endAmpFactor");
+        CheckRange(Smear.TeethFactor, 0f, 3f, "smear.teethFactor");
+        CheckRange(Smear.MottleDensity, 0f, 10f, "smear.mottleDensity");
+        CheckRange(Smear.MottleMaxRadiusFactor, 0f, 2f, "smear.mottleMaxRadiusFactor");
+        CheckRange(Smear.DistressDensity, 0f, 10f, "smear.distressDensity");
+
+        CheckRange(Band.EdgeAmpFactor, 0f, 1f, "band.edgeAmpFactor");
+        CheckRange(Band.EndAmpFactor, 0f, 1f, "band.endAmpFactor");
+        CheckRange(Band.TeethLeftFactor, 0f, 5f, "band.teethLeftFactor");
+        CheckRange(Band.TeethRightFactor, 0f, 5f, "band.teethRightFactor");
+        CheckRange(Band.MottleDensity, 0f, 10f, "band.mottleDensity");
+        CheckRange(Band.MottleMaxRadiusFactor, 0f, 2f, "band.mottleMaxRadiusFactor");
+        CheckRange(Band.DistressDensity, 0f, 10f, "band.distressDensity");
+        CheckRange(Band.SubtitleDistressDensity, 0f, 10f, "band.subtitleDistressDensity");
+
+        CheckRange(Accents.ChipsLeftCount, 0, 200, "accents.chipsLeftCount");
+        CheckRange(Accents.ChipsRightCount, 0, 200, "accents.chipsRightCount");
+        CheckRange(Accents.ChipsSpread, 0f, 300f, "accents.chipsSpread");
+        CheckRange(Accents.SplatterGreenCount, 0, 300, "accents.splatterGreenCount");
+        CheckRange(Accents.SplatterDarkCount, 0, 300, "accents.splatterDarkCount");
+
+        CheckRange(Tagline.SizeFactor, 0.05f, 2f, "tagline.sizeFactor");
+        CheckRange(Tagline.BaselineGapFactor, -1f, 3f, "tagline.baselineGapFactor");
+        CheckRange(Tagline.ScaleX, 0.1f, 3f, "tagline.scaleX");
+        CheckRange(Tagline.DistressDensity, 0f, 10f, "tagline.distressDensity");
+
+        var corner = (Logo.Corner ?? "br").Trim().ToLowerInvariant();
+        if (corner is not ("tl" or "tr" or "bl" or "br"))
+        {
+            throw new InvalidOperationException($"Недопустимый угол логотипа 'logo.corner': '{Logo.Corner}'. Допустимые: tl, tr, bl, br.");
+        }
+
+        CheckRange(Logo.SizeFraction, 0.01f, 1f, "logo.sizeFraction");
+        CheckRange(Logo.Opacity, 0f, 1f, "logo.opacity");
+        CheckRange(Logo.MarginFraction, 0f, 0.5f, "logo.marginFraction");
+
+        CheckRange(Background.DarkenAlpha, 0f, 1f, "background.darkenAlpha");
+        CheckRange(Background.BlurSigma, 0f, 100f, "background.blurSigma");
+    }
+
+    private static void CheckRange(float value, float min, float max, string name)
+    {
+        if (!float.IsFinite(value) || value < min || value > max)
+        {
+            throw new InvalidOperationException($"Параметр стиля '{name}' вне допустимого диапазона [{min}..{max}]: {value}");
+        }
+    }
+
+    private static void CheckRange(int value, int min, int max, string name)
+    {
+        if (value < min || value > max)
+        {
+            throw new InvalidOperationException($"Параметр стиля '{name}' вне допустимого диапазона [{min}..{max}]: {value}");
+        }
     }
 
     /// <summary>Чистые цвета баннера.</summary>

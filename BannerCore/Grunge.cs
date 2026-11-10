@@ -20,8 +20,9 @@ public static class Grunge
     public static SKPath BrushStrokePath(SKRect rect, int seed, float edgeAmp, float endAmp)
     {
         var points = new List<SKPoint>();
-        var step = MathF.Max(3f, rect.Height * 0.04f);
-        var scale = rect.Height * 0.8f;
+        var span = MathF.Max(1f, MathF.Abs(rect.Width) + MathF.Abs(rect.Height));
+        var step = MathF.Max(3f, MathF.Max(MathF.Abs(rect.Height) * 0.04f, span / 512f));
+        var scale = MathF.Max(1f, MathF.Abs(rect.Height) * 0.8f);
 
         for (var x = rect.Left; x <= rect.Right; x += step)
         {
@@ -64,13 +65,15 @@ public static class Grunge
     {
         using var paint = new SKPaint { IsAntialias = true };
         using var bite = new SKPaint { Color = SKColors.Black, IsAntialias = true, BlendMode = SKBlendMode.DstOut };
+        var cappedLength = Math.Clamp(maxLength, 0f, 1000f);
+        var iterations = 0;
 
-        for (var y = top; y < bottom;)
+        for (var y = top; y < bottom && iterations < 512; iterations++)
         {
             var thickness = 2f + (float)rng.NextDouble() * 2.5f;
             // распределение к середине: зубья плотные и чанковые, а не редкие нити
             var r = (float)rng.NextDouble();
-            var length = maxLength * (0.15f + 0.85f * r * r);
+            var length = cappedLength * (0.15f + 0.85f * r * r);
             var x2 = edgeX + direction * length;
 
             paint.Color = color.WithAlpha((byte)(170 + rng.Next(86)));
@@ -80,7 +83,7 @@ public static class Grunge
             // встречный выгрыз внутрь – торец становится «прозрачно-рваным», а не бахромой
             if (rng.NextDouble() < 0.45)
             {
-                var biteLength = (float)(rng.NextDouble() * rng.NextDouble()) * maxLength * 0.5f;
+                var biteLength = (float)(rng.NextDouble() * rng.NextDouble()) * cappedLength * 0.5f;
                 var biteX2 = edgeX - direction * biteLength;
                 var biteY = y + thickness;
 
@@ -98,14 +101,16 @@ public static class Grunge
     /// </summary>
     public static void Mottle(SKCanvas canvas, SKRect area, Random rng, SKColor color, int count, float maxRadius)
     {
+        var cappedCount = Math.Clamp(count, 0, 2000);
+        var cappedRadius = Math.Clamp(maxRadius, 0f, 500f);
         using var paint = new SKPaint { Color = color, IsAntialias = true, BlendMode = SKBlendMode.SrcATop };
 
-        for (var i = 0; i < count; i++)
+        for (var i = 0; i < cappedCount; i++)
         {
             var x = area.Left + (float)rng.NextDouble() * area.Width;
             var y = area.Top + (float)rng.NextDouble() * area.Height;
             // зерно вытянуто по горизонтали – направление мазка кисти, а не круглый «горошек»
-            var rx = (float)(rng.NextDouble() * rng.NextDouble()) * maxRadius + 1.5f;
+            var rx = (float)(rng.NextDouble() * rng.NextDouble()) * cappedRadius + 1.5f;
             var ry = rx * (0.25f + (float)rng.NextDouble() * 0.45f);
 
             canvas.DrawOval(x, y, rx, ry, paint);
@@ -118,13 +123,15 @@ public static class Grunge
     /// </summary>
     public static void Splatter(SKCanvas canvas, SKPoint center, SKColor color, Random rng, int count, float spread)
     {
+        var cappedCount = Math.Clamp(count, 0, 500);
+        var cappedSpread = Math.Clamp(spread, 0f, 1000f);
         using var paint = new SKPaint { Color = color, IsAntialias = true };
 
-        for (var i = 0; i < count; i++)
+        for (var i = 0; i < cappedCount; i++)
         {
             // среднее двух равномерных – грубое подобие гауссова разброса (гуще к центру)
-            var dx = (float)(rng.NextDouble() + rng.NextDouble() - 1) * spread;
-            var dy = (float)(rng.NextDouble() + rng.NextDouble() - 1) * spread * 0.7f;
+            var dx = (float)(rng.NextDouble() + rng.NextDouble() - 1) * cappedSpread;
+            var dy = (float)(rng.NextDouble() + rng.NextDouble() - 1) * cappedSpread * 0.7f;
 
             if (rng.NextDouble() < 0.25)
             {
@@ -152,11 +159,13 @@ public static class Grunge
         int count,
         float spread)
     {
-        for (var i = 0; i < count; i++)
+        var cappedCount = Math.Clamp(count, 0, 500);
+        var cappedSpread = Math.Clamp(spread, 0f, 500f);
+        for (var i = 0; i < cappedCount; i++)
         {
             var t = (float)rng.NextDouble();
-            var x = from.X + (to.X - from.X) * t + (float)(rng.NextDouble() - 0.5) * spread;
-            var y = from.Y + (to.Y - from.Y) * t + (float)(rng.NextDouble() - 0.5) * spread;
+            var x = from.X + (to.X - from.X) * t + (float)(rng.NextDouble() - 0.5) * cappedSpread;
+            var y = from.Y + (to.Y - from.Y) * t + (float)(rng.NextDouble() - 0.5) * cappedSpread;
 
             Chip(canvas, new(x, y), color, 2f + (float)rng.NextDouble() * 4.5f, rng);
         }
@@ -168,7 +177,8 @@ public static class Grunge
     /// </summary>
     public static void Distress(SKCanvas canvas, SKRect area, Random rng, float density = 1f)
     {
-        var dots = (int)(area.Width * area.Height / 550f * density);
+        var cappedDensity = Math.Clamp(density, 0f, 10f);
+        var dots = Math.Clamp((int)(MathF.Max(0f, area.Width) * MathF.Max(0f, area.Height) / 550f * cappedDensity), 0, 4000);
 
         using var bite = new SKPaint { Color = SKColors.Black, IsAntialias = true, BlendMode = SKBlendMode.DstOut };
 
@@ -190,7 +200,7 @@ public static class Grunge
             StrokeWidth = 1.2f,
         };
 
-        var scratches = (int)(6 * density);
+        var scratches = Math.Clamp((int)(6 * cappedDensity), 0, 120);
 
         for (var i = 0; i < scratches; i++)
         {

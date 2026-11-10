@@ -32,7 +32,11 @@ public sealed record BannerExport(int Version, string Profile, BannerSpec Spec, 
 
     public static BannerExport FromJson(string json)
     {
-        return JsonSerializer.Deserialize<BannerExport>(json, JsonOptions)
-               ?? throw new InvalidOperationException("Пустой JSON конверта баннера");
+        var export = JsonSerializer.Deserialize<BannerExport>(json, JsonOptions)
+                     ?? throw new InvalidOperationException("Пустой JSON конверта баннера");
+        if (export.Spec is null || export.Style is null)
+            throw new InvalidOperationException("В конверте баннера отсутствуют spec или style");
+        export.Style.Validate();
+        return export;
     }
 }

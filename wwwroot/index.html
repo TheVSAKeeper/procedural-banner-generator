@@ -64,6 +64,7 @@
             let ws = null;
             let reconnectTimer = null;
             let targetWsUrl = "ws://127.0.0.1:5219/ws";
+            let authToken = "";
             let disposed = false;
 
             const toolDefs = [
@@ -131,7 +132,12 @@
                     ws.onopen = function () {
                         notifyStatus(true);
                         try {
-                            ws.send(JSON.stringify({ type: "hello", url: location.href }));
+                            ws.send(JSON.stringify({
+                                type: "hello",
+                                app: "procedural-banner-generator",
+                                token: authToken,
+                                url: location.href
+                            }));
                         } catch {}
                     };
                     ws.onmessage = async function (ev) {
@@ -163,10 +169,11 @@
             }
 
             return {
-                bind: function (ref, wsUrl) {
+                bind: function (ref, wsUrl, token) {
                     disposed = false;
                     dotNetRef = ref;
                     if (wsUrl) targetWsUrl = wsUrl;
+                    if (typeof token === "string") authToken = token;
                     registerWebMcp();
                     connectWs();
                 },

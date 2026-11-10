@@ -529,11 +529,13 @@
 
     private const string StorageKey = "banner-state-v1";
     private const string ProfilesKey = "banner-profiles-v1";
+    private const string McpTokenKey = "banner-mcp-token-v1";
     private const int MaxHistorySteps = 20;
     private const long ManualCoalesceWindowMs = 1500;
 
     private List<ProfileEntry> _profiles = [];
     private string _activeId = "";
+    private string _mcpToken = System.Security.Cryptography.RandomNumberGenerator.GetHexString(32, lowercase: true);
     private bool _mcpConnected;
     private bool _promptCopied;
     private DotNetObjectReference<Home>? _dotNetRef;
@@ -551,16 +553,36 @@
         var bytes = await Http.GetByteArrayAsync("Bender-Black.otf");
         _typeface = SKTypeface.FromData(SKData.CreateCopy(bytes));
         await LoadStateAsync();
+        await EnsureMcpTokenAsync();
         Render();
 
         _dotNetRef = DotNetObjectReference.Create(this);
         try
         {
-            await JS.InvokeVoidAsync("bannerMcp.bind", _dotNetRef, "ws://127.0.0.1:5219/ws");
+            var wsUrl = $"ws://127.0.0.1:5219/ws?token={Uri.EscapeDataString(_mcpToken)}";
+            await JS.InvokeVoidAsync("bannerMcp.bind", _dotNetRef, wsUrl, _mcpToken);
         }
         catch
         {
             // Мост опционален – при ошибке JS-интеропа редактор продолжает работать автономно.
+        }
+    }
+
+    private async Task EnsureMcpTokenAsync()
+    {
+        try
+        {
+            var stored = await JS.InvokeAsync<string?>("localStorage.getItem", McpTokenKey);
+            if (!string.IsNullOrWhiteSpace(stored) && stored.Trim().Length >= 16)
+            {
+                _mcpToken = stored.Trim();
+                return;
+            }
+            await JS.InvokeVoidAsync("localStorage.setItem", McpTokenKey, _mcpToken);
+        }
+        catch
+        {
+            // ponytail: при недоступном localStorage используется одноразовый токен текущей вкладки
         }
     }
 
@@ -602,6 +624,7 @@
     private string BuildAgentPrompt()
     {
         var baseUri = Nav.BaseUri.EndsWith('/') ? Nav.BaseUri : Nav.BaseUri + "/";
+        var origin = new Uri(baseUri).GetLeftPart(UriPartial.Authority);
         var bridgeUrl = baseUri + "mcp-bridge.js";
         return $$"""
             Подключись к открытому в моём браузере сайту процедурного генератора баннеров ({{baseUri}}) через MCP для создания и редактирования шаблонов:
@@ -610,12 +633,12 @@
             - **Куда ставить скрипт моста и прописывать MCP-сервер:** по умолчанию – локально в текущую директорию, откуда запущен агент (`./.banner-mcp/mcp-bridge.js` и локальная/проектная конфигурация MCP), либо глобально в профиль пользователя (`~/.banner-mcp` и глобальный конфиг агента).
             - **Делать ли резервные копии профилей на диск:** так как сайт хранит шаблоны в `localStorage` браузера, спроси, нужно ли сохранять JSON-бэкапы шаблонов (через `get_template`) и итоговые PNG на диск в рабочей папке (например, в `./banner-backups/`).
 
-            1. Скачай скрипт локального MCP-моста (без внешних зависимостей) в текущую рабочую директорию `./.banner-mcp` (или в выбранную папку) и запусти фоновый демон (команда выведет полные пути `nodePath`, `scriptPath` и адрес `mcpHttpUrl`):
-            node -e "const fs=require('fs'),p=require('path'),cp=require('child_process'),d=p.join(process.cwd(),'.banner-mcp'),f=p.join(d,'mcp-bridge.js');fs.mkdirSync(d,{recursive:true});fs.writeFileSync(p.join(d,'package.json'),JSON.stringify({type:'commonjs'}));fetch('{{bridgeUrl}}').then(r=>{if(!r.ok)throw new Error(r.status);return r.text()}).then(t=>{fs.writeFileSync(f,t);console.log(cp.execFileSync(process.execPath,[f,'--daemon'],{encoding:'utf8'}))})"
-            - Примечание по окружению и оболочке: скачивание скрипта и доступ к локальному мосту на `127.0.0.1:5219` требуют разрешения на сеть и loopback (вне изолированной песочницы, если среда блокирует `127.0.0.1`). Проверь `node --version`: если `node` не найден в `PATH` неинтерактивной оболочки или обёртка менеджера версий (`nvm`, `fnm`, `volta` и т.п.) не инициализирована, найди установленный `node`/`node.exe` в стандартных путях системы (`Program Files\nodejs`, `/usr/local/bin`, `/opt/homebrew/bin`, папки менеджеров версий) и используй его полный путь `nodePath` (при необходимости скачай `{{bridgeUrl}}` в `.banner-mcp/mcp-bridge.js` штатными средствами оболочки и запусти `"<nodePath>" "<scriptPath>" --daemon`).
+            1. Скачай скрипт локального MCP-моста (без внешних зависимостей) в текущую рабочую директорию `./.banner-mcp` (или в выбранную папку) и запусти фоновый демон с токеном сопряжения вкладки (команда выведет полные пути `nodePath`, `scriptPath` и адрес `mcpHttpUrl`):
+            node -e "const fs=require('fs'),p=require('path'),cp=require('child_process'),d=p.join(process.cwd(),'.banner-mcp'),f=p.join(d,'mcp-bridge.js');fs.mkdirSync(d,{recursive:true});fs.writeFileSync(p.join(d,'package.json'),JSON.stringify({type:'commonjs'}));fetch('{{bridgeUrl}}').then(r=>{if(!r.ok)throw new Error(r.status);return r.text()}).then(t=>{fs.writeFileSync(f,t);console.log(cp.execFileSync(process.execPath,[f,'--daemon','--token','{{_mcpToken}}','--origin','{{origin}}'],{encoding:'utf8'}))})"
+            - Примечание по окружению и оболочке: скачивание скрипта и доступ к локальному мосту на `127.0.0.1:5219` требуют разрешения на сеть и loopback (вне изолированной песочницы, если среда блокирует `127.0.0.1`). Проверь `node --version`: если `node` не найден в `PATH` неинтерактивной оболочки или обёртка менеджера версий (`nvm`, `fnm`, `volta` и т.п.) не инициализирована, найди установленный `node`/`node.exe` в стандартных путях системы (`Program Files\nodejs`, `/usr/local/bin`, `/opt/homebrew/bin`, папки менеджеров версий) и используй его полный путь `nodePath` (при необходимости скачай `{{bridgeUrl}}` в `.banner-mcp/mcp-bridge.js` штатными средствами оболочки и запусти `"<nodePath>" "<scriptPath>" --daemon --token {{_mcpToken}} --origin {{origin}}`).
 
             2. Зарегистрируй MCP-сервер `banner-generator` в конфигурации агента (по умолчанию – локально для текущей директории/проекта, либо глобально в пользовательской конфигурации по выбору пользователя или если агент поддерживает только единый конфиг):
-            - Предпочтительный транспорт – streamable HTTP по адресу `http://127.0.0.1:5219/mcp`.
+            - Предпочтительный транспорт – streamable HTTP по адресу `mcpHttpUrl` из вывода шага 1 (`http://127.0.0.1:5219/mcp?token={{_mcpToken}}`).
             - Если среда поддерживает только `stdio` – укажи полные абсолютные пути `nodePath` и `scriptPath` из вывода шага 1 (без символа `~`, так как `spawn` на Windows его не раскрывает): команда `<nodePath>`, аргументы `[ "<scriptPath>" ]`.
             - Если только что добавленный MCP-сервер (для **любого** транспорта – и HTTP, и stdio) не появился среди инструментов текущей сессии без перезапуска, вызывай инструменты прямо сейчас через CLI по полным путям:
               `"<nodePath>" "<scriptPath>" call <tool> '<json>' [--out preview.png]`
@@ -816,7 +839,16 @@
         await using var stream = file.OpenReadStream(20 * 1024 * 1024);
         using var ms = new MemoryStream();
         await stream.CopyToAsync(ms);
-        return SKImage.FromEncodedData(ms.ToArray())
+        using var data = SKData.CreateCopy(ms.ToArray());
+        using var codec = SKCodec.Create(data)
+                          ?? throw new InvalidOperationException("формат картинки не распознан");
+        if (codec.Info.Width <= 0 || codec.Info.Height <= 0
+            || codec.Info.Width > 8192 || codec.Info.Height > 8192
+            || (long)codec.Info.Width * codec.Info.Height > 33_554_432)
+        {
+            throw new InvalidOperationException($"размер изображения ({codec.Info.Width}x{codec.Info.Height}) превышает допустимый лимит");
+        }
+        return SKImage.FromEncodedData(data)
                ?? throw new InvalidOperationException("формат картинки не распознан");
     }
 
@@ -994,6 +1026,10 @@
             if (!string.IsNullOrEmpty(json)
                 && JsonSerializer.Deserialize<ProfileStore>(json) is { Profiles.Count: > 0 } store)
             {
+                foreach (var p in store.Profiles)
+                {
+                    p.State.Style.Validate();
+                }
                 _profiles = store.Profiles;
                 _activeId = _profiles.Any(p => p.Id == store.ActiveId) ? store.ActiveId : _profiles[0].Id;
                 ApplyState(_profiles.First(p => p.Id == _activeId).State);
@@ -1003,6 +1039,7 @@
             // Миграция одиночного снимка banner-state-v1 → профиль «Локальный» (ничего не теряем).
             var legacy = await JS.InvokeAsync<string?>("localStorage.getItem", StorageKey);
             var migrated = string.IsNullOrEmpty(legacy) ? null : JsonSerializer.Deserialize<SavedState>(legacy);
+            migrated?.Style.Validate();
             SeedSingleProfile(migrated ?? CaptureState());
         }
         catch
@@ -1614,28 +1651,7 @@
 
     private static void ValidateStyleColors(BannerStyle s)
     {
-        StyleColor.Parse(s.Palette.GreenFaceTop);
-        StyleColor.Parse(s.Palette.GreenFaceMid);
-        StyleColor.Parse(s.Palette.GreenFaceBottom);
-        StyleColor.Parse(s.Palette.GreenExtrude);
-        StyleColor.Parse(s.Palette.WhiteFaceTop);
-        StyleColor.Parse(s.Palette.WhiteFaceMid);
-        StyleColor.Parse(s.Palette.WhiteFaceBottom);
-        StyleColor.Parse(s.Palette.WhiteExtrude);
-        StyleColor.Parse(s.Palette.BandTop);
-        StyleColor.Parse(s.Palette.BandBottom);
-        StyleColor.Parse(s.Palette.Smear);
-        StyleColor.Parse(s.Palette.Plate);
-        StyleColor.Parse(s.Palette.SubtitleText);
-        StyleColor.Parse(s.Palette.TitleStroke);
-        StyleColor.Parse(s.Palette.Chips);
-        StyleColor.Parse(s.Palette.DarkSplatter);
-        StyleColor.Parse(s.TitleFx.MainMottleColor);
-        StyleColor.Parse(s.TitleFx.PrefixMottleColor);
-        StyleColor.Parse(s.Plate.MottleColor);
-        StyleColor.Parse(s.Smear.MottleColor);
-        StyleColor.Parse(s.Band.MottleColor);
-        StyleColor.Parse(s.Tagline.Color);
+        s.Validate();
     }
 
     private static IReadOnlyList<string> GetChangedSections(BannerStyle before, BannerStyle after)

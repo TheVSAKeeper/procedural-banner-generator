@@ -35,52 +35,64 @@ public sealed partial class BannerRenderer(BannerStyle style)
     /// <returns>PNG-кодированные байты готового баннера.</returns>
     public byte[] RenderPng(BannerSpec spec, SKTypeface typeface, SKImage? background = null, SKImage? logo = null)
     {
-        var info = new SKImageInfo(spec.Width, spec.Height);
+        style.Validate();
+
+        var width = Math.Clamp(spec.Width, 64, 4096);
+        var height = Math.Clamp(spec.Height, 64, 4096);
+        var titleText = TruncateText(spec.Title, 500);
+        var subtitleText = TruncateText(spec.Subtitle, 500);
+        var taglineText = string.IsNullOrWhiteSpace(spec.Tagline) ? null : TruncateText(spec.Tagline!, 500);
+
+        var info = new SKImageInfo(width, height);
         using var surface = SKSurface.Create(info);
         var canvas = surface.Canvas;
         var rng = new Random(spec.Seed);
         var layout = style.Layout;
 
-        DrawBackground(canvas, spec, background);
+        DrawBackground(canvas, spec with { Width = width, Height = height }, background);
 
-        var (prefix, main) = SplitTitle(spec.Title);
+        var (prefix, main) = SplitTitle(titleText);
 
-        var titleSize = spec.Width * Math.Clamp(layout.TitleSizeFraction, 0.02f, 0.15f);
-        using var titleFont = new SKFont(typeface, titleSize) { ScaleX = layout.TitleScaleX, Subpixel = true };
-        var maxTitleWidth = spec.Width * layout.MaxTitleWidthFraction;
+        var titleSize = width * Math.Clamp(layout.TitleSizeFraction, 0.02f, 0.15f);
+        using var titleFont = new SKFont(typeface, titleSize)
+        {
+            ScaleX = Math.Clamp(layout.TitleScaleX, 0.2f, 3f),
+            Subpixel = true,
+        };
+        var maxTitleWidth = width * Math.Clamp(layout.MaxTitleWidthFraction, 0.1f, 1f);
         var totalWidth = MeasureTitleRow(titleFont, prefix, main, out var spaceWidth);
 
-        if (totalWidth > maxTitleWidth)
+        if (totalWidth > maxTitleWidth && totalWidth > 0f)
         {
             titleSize *= maxTitleWidth / totalWidth;
             titleFont.Size = titleSize;
             totalWidth = MeasureTitleRow(titleFont, prefix, main, out spaceWidth);
         }
 
-        using var subFont = new SKFont(typeface, titleSize * layout.SubtitleSizeFactor)
+        using var subFont = new SKFont(typeface, titleSize * Math.Clamp(layout.SubtitleSizeFactor, 0.1f, 1.5f))
         {
-            ScaleX = layout.SubtitleScaleX,
+            ScaleX = Math.Clamp(layout.SubtitleScaleX, 0.2f, 3f),
             Subpixel = true,
         };
 
-        var subWidth = subFont.MeasureText(spec.Subtitle, out var subBounds);
+        var subWidth = subFont.MeasureText(subtitleText, out var subBounds);
 
-        var centerX = spec.Width / 2f;
-        var titleBaseline = spec.Height * layout.TitleBaselineFraction;
-        var subBaseline = titleBaseline + titleSize * layout.SubtitleBaselineOffsetFactor;
+        var centerX = width / 2f;
+        var titleBaseline = height * Math.Clamp(layout.TitleBaselineFraction, -0.5f, 1.5f);
+        var subBaseline = titleBaseline + titleSize * Math.Clamp(layout.SubtitleBaselineOffsetFactor, -1f, 3f);
         var titleLeft = centerX - totalWidth / 2;
         titleFont.MeasureText(main, out var mainBounds);
 
-        var plate = new SKRect(titleLeft - titleSize * layout.PlateSidePaddingFactor,
-            titleBaseline + mainBounds.Top - titleSize * layout.PlateTopPaddingFactor,
-            titleLeft + totalWidth + titleSize * layout.PlateSidePaddingFactor,
-            titleBaseline + titleSize * layout.PlateBottomFactor);
+        var plate = new SKRect(titleLeft - titleSize * Math.Clamp(layout.PlateSidePaddingFactor, 0f, 3f),
+            titleBaseline + mainBounds.Top - titleSize * Math.Clamp(layout.PlateTopPaddingFactor, 0f, 3f),
+            titleLeft + totalWidth + titleSize * Math.Clamp(layout.PlateSidePaddingFactor, 0f, 3f),
+            titleBaseline + titleSize * Math.Clamp(layout.PlateBottomFactor, 0.05f, 4f));
 
-        var bandHeight = subFont.Size * layout.BandHeightFactor;
+        var bandHeight = subFont.Size * Math.Clamp(layout.BandHeightFactor, 0.05f, 5f);
         var bandCenterY = subBaseline + (subBounds.Top + subBounds.Bottom) / 2;
-        var band = new SKRect(centerX - subWidth / 2 - subFont.Size * layout.BandLeftPaddingFactor,
+        var band = new SKRect(centerX - subWidth / 2 - subFont.Size * Math.Clamp(layout.BandLeftPaddingFactor, 0f, 5f),
             bandCenterY - bandHeight / 2,
-            centerX + subWidth / 2 + subFont.Size * layout.BandRightPaddingFactor,
+            centerX + subWidth / 2 + subFont.Size * Math.Clamp(layout.BandRightPaddingFactor, 0f, 5f),
             bandCenterY + bandHeight / 2);
 
         canvas.Save();
@@ -95,23 +107,30 @@ public sealed partial class BannerRenderer(BannerStyle style)
         DrawTitleRow(canvas, prefix, main, titleFont, titleLeft, titleBaseline, spaceWidth, titleSize,
             rng);
 
-        DrawSubtitle(canvas, spec.Subtitle, subFont, centerX, subBaseline, subWidth, subBounds, rng);
+        DrawSubtitle(canvas, subtitleText, subFont, centerX, subBaseline, subWidth, subBounds, rng);
 
-        if (!string.IsNullOrWhiteSpace(spec.Tagline) && style.Tagline.Enabled)
+        if (taglineText is not null && style.Tagline.Enabled)
         {
-            DrawTagline(canvas, spec.Tagline!, typeface, centerX, subBaseline, titleSize, rng);
+            DrawTagline(canvas, taglineText, typeface, centerX, subBaseline, titleSize, rng);
         }
 
         canvas.Restore();
 
         if (logo is not null && style.Logo.Enabled)
         {
-            DrawLogo(canvas, logo, spec.Width, spec.Height);
+            DrawLogo(canvas, logo, width, height);
         }
 
         using var image = surface.Snapshot();
         using var data = image.Encode(SKEncodedImageFormat.Png, 100);
         return data.ToArray();
+    }
+
+    private static string TruncateText(string? value, int maxLength)
+    {
+        if (string.IsNullOrEmpty(value))
+            return string.Empty;
+        return value.Length <= maxLength ? value : value[..maxLength];
     }
 
     /// <summary>
@@ -193,9 +212,10 @@ public sealed partial class BannerRenderer(BannerStyle style)
 
         using (var paint = new SKPaint { IsAntialias = true })
         {
-            if (bg.BlurSigma > 0.01f)
+            var blur = Math.Clamp(bg.BlurSigma, 0f, 50f);
+            if (blur > 0.01f)
             {
-                paint.ImageFilter = SKImageFilter.CreateBlur(bg.BlurSigma, bg.BlurSigma);
+                paint.ImageFilter = SKImageFilter.CreateBlur(blur, blur);
             }
 
             canvas.DrawImage(image, dest, paint);
@@ -218,9 +238,11 @@ public sealed partial class BannerRenderer(BannerStyle style)
         var s = style.Plate;
         var plateColor = StyleColor.Parse(style.Palette.Plate);
 
+        var shadowBlur = Math.Clamp(s.ShadowBlur, 0f, 50f);
+        var shadowOffsetY = Math.Clamp(s.ShadowOffsetY, -50f, 50f);
         using var shadowPaint = new SKPaint
         {
-            ImageFilter = SKImageFilter.CreateDropShadow(0, s.ShadowOffsetY, s.ShadowBlur, s.ShadowBlur,
+            ImageFilter = SKImageFilter.CreateDropShadow(0, shadowOffsetY, shadowBlur, shadowBlur,
                 new(0, 0, 0, (byte)Math.Clamp(s.ShadowAlpha, 0, 255))),
         };
 
@@ -446,17 +468,18 @@ public sealed partial class BannerRenderer(BannerStyle style)
         SKColor mottleColor)
     {
         var fx = style.TitleFx;
-        var depth = MathF.Max(4f, size * fx.ExtrudeDepthFactor);
+        var depth = Math.Clamp(MathF.Max(4f, size * Math.Clamp(fx.ExtrudeDepthFactor, 0f, 0.5f)), 4f, 128f);
+        var stepX = Math.Clamp(fx.ExtrudeStepX, -5f, 5f);
 
         canvas.SaveLayer(null);
 
         using (var extrude = new SKPaint { Color = extrudeColor, IsAntialias = true })
         {
-            var steps = (int)MathF.Ceiling(depth);
+            var steps = Math.Clamp((int)MathF.Ceiling(depth), 1, 128);
 
             for (var i = steps; i >= 1; i--)
             {
-                canvas.DrawText(text, x + i * fx.ExtrudeStepX, baseline + i, SKTextAlign.Left, font, extrude);
+                canvas.DrawText(text, x + i * stepX, baseline + i, SKTextAlign.Left, font, extrude);
             }
         }
 
@@ -465,7 +488,7 @@ public sealed partial class BannerRenderer(BannerStyle style)
                    Color = StyleColor.Parse(style.Palette.TitleStroke),
                    IsAntialias = true,
                    Style = SKPaintStyle.Stroke,
-                   StrokeWidth = size * fx.StrokeWidthFactor,
+                   StrokeWidth = size * Math.Clamp(fx.StrokeWidthFactor, 0f, 0.5f),
                    StrokeJoin = SKStrokeJoin.Round,
                })
         {

@@ -13,12 +13,178 @@
 const http = require('node:http');
 const crypto = require('node:crypto');
 const fs = require('node:fs');
+const os = require('node:os');
 const path = require('node:path');
 const { spawn } = require('node:child_process');
 
 const PORT = Number(process.env.BANNER_MCP_PORT || 5219);
 const HOST = '127.0.0.1';
 const WS_GUID = '258EAFA5-E914-47DA-95CA-C5AB0DC85B11';
+
+const MAX_HTTP_BODY_BYTES = 256 * 1024;
+const MAX_WS_HELLO_BYTES = 16 * 1024;
+const MAX_WS_MESSAGE_BYTES = 16 * 1024 * 1024;
+const MAX_WS_FRAGMENTS = 64;
+const MAX_WS_CLIENTS = 8;
+const MAX_STDIO_MESSAGE_BYTES = 1024 * 1024;
+
+const DEFAULT_ALLOWED_ORIGINS = new Set([
+    'https://thevsakeeper.github.io',
+    'http://localhost:5209',
+    'https://localhost:7276',
+    'http://127.0.0.1:5209',
+    'https://127.0.0.1:7276',
+]);
+
+const AUTH_FILE =
+    process.env.BANNER_MCP_TOKEN_FILE ||
+    (path.basename(__dirname) === '.banner-mcp'
+        ? path.join(__dirname, '.mcp-auth.json')
+        : path.join(os.tmpdir(), `banner-mcp-${PORT}.auth.json`));
+
+let cachedAuth = { token: '', origins: [], mtimeMs: -1 };
+
+function normalizeOrigin(raw) {
+    if (typeof raw !== 'string' || !raw.trim()) return null;
+    try {
+        const u = new URL(raw.trim());
+        if (u.protocol !== 'http:' && u.protocol !== 'https:') return null;
+        return u.origin;
+    } catch {
+        return null;
+    }
+}
+
+function parseCliAuthOverrides(argv) {
+    let token = process.env.BANNER_MCP_TOKEN ? String(process.env.BANNER_MCP_TOKEN).trim() : '';
+    const origins = [];
+    if (process.env.BANNER_MCP_ORIGIN) {
+        for (const part of String(process.env.BANNER_MCP_ORIGIN).split(',')) {
+            const norm = normalizeOrigin(part);
+            if (norm && !origins.includes(norm)) origins.push(norm);
+        }
+    }
+    for (let i = 0; i < argv.length; i++) {
+        if (argv[i] === '--token' && i + 1 < argv.length) {
+            token = String(argv[++i]).trim();
+        } else if (argv[i] === '--origin' && i + 1 < argv.length) {
+            const norm = normalizeOrigin(argv[++i]);
+            if (norm && !origins.includes(norm)) origins.push(norm);
+        }
+    }
+    return { token, origins };
+}
+
+function initAuthFromCli(argv) {
+    const cli = parseCliAuthOverrides(argv);
+    let fileData = { token: '', origins: [] };
+    try {
+        if (fs.existsSync(AUTH_FILE)) {
+            const parsed = JSON.parse(fs.readFileSync(AUTH_FILE, 'utf8'));
+            if (parsed && typeof parsed === 'object') {
+                if (typeof parsed.token === 'string') fileData.token = parsed.token.trim();
+                if (Array.isArray(parsed.origins)) {
+                    for (const o of parsed.origins) {
+                        const norm = normalizeOrigin(o);
+                        if (norm && !fileData.origins.includes(norm)) fileData.origins.push(norm);
+                    }
+                }
+            }
+        }
+    } catch {
+        // игнорируем повреждённый файл сопряжения
+    }
+
+    const token =
+        cli.token && cli.token.length >= 16
+            ? cli.token
+            : fileData.token && fileData.token.length >= 16
+              ? fileData.token
+              : crypto.randomBytes(24).toString('hex');
+
+    const origins = [...fileData.origins];
+    for (const o of cli.origins) {
+        if (!origins.includes(o)) origins.push(o);
+    }
+
+    cachedAuth = { token, origins, mtimeMs: Date.now() };
+    try {
+        fs.writeFileSync(AUTH_FILE, JSON.stringify({ token, origins }, null, 2), { mode: 0o600 });
+        const stat = fs.statSync(AUTH_FILE);
+        cachedAuth.mtimeMs = stat.mtimeMs;
+    } catch {
+        // если каталог только для чтения – работаем с секретом в памяти
+    }
+}
+
+function getAuthState() {
+    try {
+        if (fs.existsSync(AUTH_FILE)) {
+            const stat = fs.statSync(AUTH_FILE);
+            if (stat.mtimeMs !== cachedAuth.mtimeMs) {
+                const parsed = JSON.parse(fs.readFileSync(AUTH_FILE, 'utf8'));
+                if (parsed && typeof parsed.token === 'string' && parsed.token.trim().length >= 16) {
+                    const origins = [];
+                    if (Array.isArray(parsed.origins)) {
+                        for (const o of parsed.origins) {
+                            const norm = normalizeOrigin(o);
+                            if (norm && !origins.includes(norm)) origins.push(norm);
+                        }
+                    }
+                    cachedAuth = {
+                        token: parsed.token.trim(),
+                        origins,
+                        mtimeMs: stat.mtimeMs,
+                    };
+                }
+            }
+        }
+    } catch {
+        // оставляем текущее состояние в памяти
+    }
+    if (!cachedAuth.token) {
+        initAuthFromCli(process.argv.slice(2));
+    }
+    return cachedAuth;
+}
+
+function isValidToken(candidate) {
+    if (typeof candidate !== 'string') return false;
+    const trimmed = candidate.trim();
+    if (trimmed.length < 16 || trimmed.length > 256) return false;
+    const expected = getAuthState().token;
+    if (!expected) return false;
+    const a = Buffer.from(trimmed, 'utf8');
+    const b = Buffer.from(expected, 'utf8');
+    return a.length === b.length && crypto.timingSafeEqual(a, b);
+}
+
+function extractRequestToken(req, url) {
+    const headerToken = req.headers['x-banner-mcp-token'];
+    if (typeof headerToken === 'string' && headerToken.trim()) return headerToken.trim();
+    const auth = req.headers['authorization'];
+    if (typeof auth === 'string' && /^Bearer\s+/i.test(auth)) {
+        return auth.replace(/^Bearer\s+/i, '').trim();
+    }
+    if (url && url.searchParams) {
+        const q = url.searchParams.get('token');
+        if (q) return q.trim();
+    }
+    return '';
+}
+
+function isAllowedHost(hostHeader) {
+    if (!hostHeader || typeof hostHeader !== 'string') return false;
+    const h = hostHeader.trim().toLowerCase();
+    return (
+        h === '127.0.0.1' ||
+        h === 'localhost' ||
+        h === '[::1]' ||
+        h === `127.0.0.1:${PORT}` ||
+        h === `localhost:${PORT}` ||
+        h === `[::1]:${PORT}`
+    );
+}
 
 const TOOLS = [
     {
@@ -245,76 +411,141 @@ function sendWsText(socket, text) {
 }
 
 function attachWsClient(socket) {
+    if (clients.size >= MAX_WS_CLIENTS) {
+        for (const c of clients) {
+            if (!c.verified) {
+                c.socket.destroy();
+                clients.delete(c);
+                break;
+            }
+        }
+        if (clients.size >= MAX_WS_CLIENTS) {
+            socket.destroy();
+            return;
+        }
+    }
+
     const client = {
         socket,
         buffer: Buffer.alloc(0),
         fragments: [],
+        fragmentsBytes: 0,
         connectedAt: new Date().toISOString(),
+        verified: false,
         info: null,
+        helloTimer: setTimeout(() => {
+            if (!client.verified && !socket.destroyed) {
+                socket.destroy();
+            }
+        }, 5000),
     };
     clients.add(client);
 
     socket.on('data', (chunk) => {
-        client.buffer = Buffer.concat([client.buffer, chunk]);
-        while (client.buffer.length >= 2) {
-            const b0 = client.buffer[0];
-            const b1 = client.buffer[1];
-            const fin = (b0 & 0x80) !== 0;
-            const opcode = b0 & 0x0f;
-            const masked = (b1 & 0x80) !== 0;
-            let payloadLen = b1 & 0x7f;
-            let offset = 2;
-
-            if (payloadLen === 126) {
-                if (client.buffer.length < 4) return;
-                payloadLen = client.buffer.readUInt16BE(2);
-                offset = 4;
-            } else if (payloadLen === 127) {
-                if (client.buffer.length < 10) return;
-                payloadLen = Number(client.buffer.readBigUInt64BE(2));
-                offset = 10;
+        try {
+            const maxAllowed = client.verified ? MAX_WS_MESSAGE_BYTES : MAX_WS_HELLO_BYTES;
+            if (client.buffer.length + chunk.length > maxAllowed + 14) {
+                socket.destroy();
+                return;
             }
+            client.buffer = Buffer.concat([client.buffer, chunk]);
+            while (client.buffer.length >= 2) {
+                const b0 = client.buffer[0];
+                const b1 = client.buffer[1];
+                if ((b0 & 0x70) !== 0) {
+                    socket.destroy();
+                    return;
+                }
+                const fin = (b0 & 0x80) !== 0;
+                const opcode = b0 & 0x0f;
+                const masked = (b1 & 0x80) !== 0;
+                if (!masked) {
+                    socket.destroy();
+                    return;
+                }
+                let payloadLen = b1 & 0x7f;
+                let offset = 2;
 
-            const maskLen = masked ? 4 : 0;
-            if (client.buffer.length < offset + maskLen + payloadLen) return;
+                if (payloadLen === 126) {
+                    if (client.buffer.length < 4) return;
+                    payloadLen = client.buffer.readUInt16BE(2);
+                    offset = 4;
+                } else if (payloadLen === 127) {
+                    if (client.buffer.length < 10) return;
+                    const bigLen = client.buffer.readBigUInt64BE(2);
+                    if (bigLen > BigInt(maxAllowed)) {
+                        socket.destroy();
+                        return;
+                    }
+                    payloadLen = Number(bigLen);
+                    offset = 10;
+                }
 
-            const maskKey = masked ? client.buffer.subarray(offset, offset + 4) : null;
-            offset += maskLen;
-            const payload = Buffer.from(client.buffer.subarray(offset, offset + payloadLen));
-            client.buffer = client.buffer.subarray(offset + payloadLen);
+                const frameLimit = client.verified ? MAX_WS_MESSAGE_BYTES : MAX_WS_HELLO_BYTES;
+                if (payloadLen > frameLimit) {
+                    socket.destroy();
+                    return;
+                }
 
-            if (masked && maskKey) {
+                const maskLen = 4;
+                if (client.buffer.length < offset + maskLen + payloadLen) return;
+
+                const maskKey = client.buffer.subarray(offset, offset + 4);
+                offset += maskLen;
+                const payload = Buffer.from(client.buffer.subarray(offset, offset + payloadLen));
+                client.buffer = client.buffer.subarray(offset + payloadLen);
+
                 for (let i = 0; i < payload.length; i++) {
                     payload[i] ^= maskKey[i & 3];
                 }
-            }
 
-            if (opcode === 0x08) {
-                // Close
-                socket.end(encodeWsFrame(0x08, Buffer.alloc(0)));
-                return;
-            }
-            if (opcode === 0x09) {
-                // Ping -> Pong
-                socket.write(encodeWsFrame(0x0a, payload));
-                continue;
-            }
-            if (opcode === 0x0a) {
-                continue;
-            }
+                if (opcode === 0x08) {
+                    socket.end(encodeWsFrame(0x08, Buffer.alloc(0)));
+                    return;
+                }
+                if (opcode === 0x09) {
+                    if (payload.length > 125) {
+                        socket.destroy();
+                        return;
+                    }
+                    socket.write(encodeWsFrame(0x0a, payload));
+                    continue;
+                }
+                if (opcode === 0x0a) {
+                    continue;
+                }
 
-            if (opcode === 0x01 || opcode === 0x00) {
-                client.fragments.push(payload);
-                if (fin) {
-                    const full = Buffer.concat(client.fragments).toString('utf8');
-                    client.fragments = [];
-                    handleWsMessage(client, full);
+                if (opcode === 0x01 || opcode === 0x00) {
+                    if (
+                        client.fragments.length >= MAX_WS_FRAGMENTS ||
+                        client.fragmentsBytes + payload.length > frameLimit
+                    ) {
+                        socket.destroy();
+                        return;
+                    }
+                    client.fragments.push(payload);
+                    client.fragmentsBytes += payload.length;
+                    if (fin) {
+                        const full = Buffer.concat(client.fragments).toString('utf8');
+                        client.fragments = [];
+                        client.fragmentsBytes = 0;
+                        handleWsMessage(client, full);
+                    }
+                } else {
+                    socket.destroy();
+                    return;
                 }
             }
+        } catch {
+            socket.destroy();
         }
     });
 
     const cleanup = () => {
+        if (client.helloTimer) {
+            clearTimeout(client.helloTimer);
+            client.helloTimer = null;
+        }
         clients.delete(client);
         for (const [id, pending] of pendingRequests.entries()) {
             if (pending.client === client) {
@@ -336,17 +567,46 @@ function handleWsMessage(client, raw) {
         return;
     }
 
-    if (msg.type === 'hello') {
-        client.info = msg;
+    if (!msg || typeof msg !== 'object' || Array.isArray(msg)) {
         return;
     }
 
-    if (msg.id && pendingRequests.has(msg.id)) {
+    if (msg.type === 'hello') {
+        if (msg.app !== 'procedural-banner-generator' || !isValidToken(msg.token)) {
+            client.socket.destroy();
+            return;
+        }
+        if (typeof msg.url === 'string' && msg.url.length > 0 && !isAllowedBrowserOrigin(msg.url)) {
+            client.socket.destroy();
+            return;
+        }
+        client.verified = true;
+        if (client.helloTimer) {
+            clearTimeout(client.helloTimer);
+            client.helloTimer = null;
+        }
+        client.info = {
+            type: 'hello',
+            app: msg.app,
+            url: typeof msg.url === 'string' ? msg.url.slice(0, 512) : '',
+        };
+        return;
+    }
+
+    if (!client.verified) {
+        client.socket.destroy();
+        return;
+    }
+
+    if (typeof msg.id === 'string' && pendingRequests.has(msg.id)) {
         const pending = pendingRequests.get(msg.id);
+        if (pending.client !== client) {
+            return;
+        }
         pendingRequests.delete(msg.id);
         clearTimeout(pending.timer);
         if (msg.error) {
-            pending.reject(new Error(msg.error));
+            pending.reject(new Error(String(msg.error)));
         } else {
             pending.resolve(msg.result);
         }
@@ -357,7 +617,7 @@ async function waitForActiveClient(timeoutMs = 4000) {
     const pick = () => {
         let last = null;
         for (const c of clients) {
-            if (!c.socket.destroyed) last = c;
+            if (!c.socket.destroyed && c.verified) last = c;
         }
         return last;
     };
@@ -395,21 +655,28 @@ async function callBrowserToolLocal(tool, args) {
     });
 }
 
+function buildMcpHttpUrl() {
+    const token = getAuthState().token;
+    return `http://${HOST}:${PORT}/mcp?token=${encodeURIComponent(token)}`;
+}
+
 function httpJsonRequest(method, urlPath, bodyObj, timeoutMs = 28000) {
     return new Promise((resolve, reject) => {
         const payload = bodyObj ? Buffer.from(JSON.stringify(bodyObj), 'utf8') : null;
+        const headers = {
+            'X-Banner-Mcp-Token': getAuthState().token,
+        };
+        if (payload) {
+            headers['Content-Type'] = 'application/json';
+            headers['Content-Length'] = payload.length;
+        }
         const req = http.request(
             {
                 hostname: HOST,
                 port: PORT,
                 path: urlPath,
                 method,
-                headers: payload
-                    ? {
-                          'Content-Type': 'application/json',
-                          'Content-Length': payload.length,
-                      }
-                    : {},
+                headers,
                 timeout: timeoutMs,
             },
             (res) => {
@@ -475,7 +742,7 @@ function formatMcpToolResult(rawResult) {
 }
 
 async function handleMcpJsonRpc(msg) {
-    if (!msg || typeof msg !== 'object') return null;
+    if (!msg || typeof msg !== 'object' || Array.isArray(msg)) return null;
 
     const { id, method, params } = msg;
     if (id === undefined || id === null) {
@@ -569,37 +836,47 @@ async function handleMcpJsonRpc(msg) {
 }
 
 function isAllowedBrowserOrigin(origin) {
-    if (!origin) return true;
-    if (process.env.BANNER_MCP_ORIGIN && origin === process.env.BANNER_MCP_ORIGIN) return true;
-    try {
-        const u = new URL(origin);
-        return (
-            u.hostname === 'localhost' ||
-            u.hostname === '127.0.0.1' ||
-            u.hostname === '[::1]' ||
-            u.hostname === 'thevsakeeper.github.io'
-        );
-    } catch {
-        return false;
-    }
+    if (!origin) return false;
+    const norm = normalizeOrigin(origin);
+    if (!norm) return false;
+    if (DEFAULT_ALLOWED_ORIGINS.has(norm)) return true;
+    return getAuthState().origins.includes(norm);
 }
 
 function setCorsHeaders(req, res) {
     const origin = req.headers.origin;
     if (origin && isAllowedBrowserOrigin(origin)) {
-        res.setHeader('Access-Control-Allow-Origin', origin);
+        res.setHeader('Access-Control-Allow-Origin', normalizeOrigin(origin));
         res.setHeader('Vary', 'Origin');
         res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
-        res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Accept, Mcp-Session-Id');
+        res.setHeader(
+            'Access-Control-Allow-Headers',
+            'Content-Type, Accept, Mcp-Session-Id, Authorization, X-Banner-Mcp-Token'
+        );
         res.setHeader('Access-Control-Allow-Private-Network', 'true');
     }
 }
 
-function readHttpBody(req) {
+function readHttpBody(req, maxBytes = MAX_HTTP_BODY_BYTES) {
     return new Promise((resolve, reject) => {
         const chunks = [];
-        req.on('data', (c) => chunks.push(c));
-        req.on('end', () => resolve(Buffer.concat(chunks).toString('utf8')));
+        let total = 0;
+        let tooLarge = false;
+        req.on('data', (c) => {
+            if (tooLarge) return;
+            total += c.length;
+            if (total > maxBytes) {
+                tooLarge = true;
+                const err = new Error(`Превышен лимит размера HTTP-тела (${maxBytes} байт)`);
+                err.statusCode = 413;
+                reject(err);
+                return;
+            }
+            chunks.push(c);
+        });
+        req.on('end', () => {
+            if (!tooLarge) resolve(Buffer.concat(chunks).toString('utf8'));
+        });
         req.on('error', reject);
     });
 }
@@ -607,6 +884,12 @@ function readHttpBody(req) {
 function startHubServer() {
     return new Promise((resolve) => {
         const server = http.createServer(async (req, res) => {
+            if (!isAllowedHost(req.headers.host)) {
+                res.writeHead(403, { 'Content-Type': 'application/json; charset=utf-8' });
+                res.end(JSON.stringify({ error: 'Forbidden host' }));
+                return;
+            }
+
             if (req.headers.origin && !isAllowedBrowserOrigin(req.headers.origin)) {
                 res.writeHead(403, { 'Content-Type': 'application/json; charset=utf-8' });
                 res.end(JSON.stringify({ error: 'Forbidden origin' }));
@@ -621,15 +904,22 @@ function startHubServer() {
             }
 
             const url = new URL(req.url || '/', `http://${HOST}:${PORT}`);
+            const paired = isValidToken(extractRequestToken(req, url));
 
             if (req.method === 'GET' && url.pathname === '/health') {
-                const active = [...clients].filter((c) => !c.socket.destroyed);
+                if (!paired) {
+                    res.writeHead(401, { 'Content-Type': 'application/json; charset=utf-8' });
+                    res.end(JSON.stringify({ ok: false, error: 'Unauthorized' }));
+                    return;
+                }
+                const active = [...clients].filter((c) => !c.socket.destroyed && c.verified);
                 res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
                 res.end(
                     JSON.stringify({
                         ok: true,
+                        paired: true,
                         port: PORT,
-                        mcpHttpUrl: `http://${HOST}:${PORT}/mcp`,
+                        mcpHttpUrl: buildMcpHttpUrl(),
                         nodePath: process.execPath,
                         scriptPath: __filename,
                         connectedClients: active.length,
@@ -639,23 +929,37 @@ function startHubServer() {
                 return;
             }
 
+            if (!paired) {
+                res.writeHead(401, { 'Content-Type': 'application/json; charset=utf-8' });
+                res.end(JSON.stringify({ error: 'Unauthorized: missing or invalid MCP pairing token' }));
+                return;
+            }
+
             if (req.method === 'POST' && url.pathname === '/rpc') {
                 try {
-                    const body = JSON.parse((await readHttpBody(req)) || '{}');
+                    const rawBody = await readHttpBody(req);
+                    const body = JSON.parse(rawBody || '{}');
+                    if (!body || typeof body !== 'object' || Array.isArray(body)) {
+                        res.writeHead(400, { 'Content-Type': 'application/json; charset=utf-8' });
+                        res.end(JSON.stringify({ ok: false, error: 'Ожидался JSON-объект' }));
+                        return;
+                    }
                     const result = await callBrowserToolLocal(body.tool, body.args || {});
                     const parsed = typeof result === 'string' ? JSON.parse(result) : result;
                     res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
                     res.end(JSON.stringify({ ok: true, result: parsed }));
                 } catch (err) {
-                    res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
-                    res.end(JSON.stringify({ ok: false, error: String(err.message || err) }));
+                    const status = err && err.statusCode === 413 ? 413 : 200;
+                    res.writeHead(status, { 'Content-Type': 'application/json; charset=utf-8' });
+                    res.end(JSON.stringify({ ok: false, error: String((err && err.message) || err) }));
                 }
                 return;
             }
 
             if (req.method === 'POST' && url.pathname === '/mcp') {
                 try {
-                    const body = JSON.parse((await readHttpBody(req)) || '{}');
+                    const rawBody = await readHttpBody(req);
+                    const body = JSON.parse(rawBody || '{}');
                     const reply = await handleMcpJsonRpc(body);
                     if (!reply) {
                         res.writeHead(202);
@@ -665,8 +969,16 @@ function startHubServer() {
                     res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
                     res.end(JSON.stringify(reply));
                 } catch (err) {
-                    res.writeHead(400, { 'Content-Type': 'application/json; charset=utf-8' });
-                    res.end(JSON.stringify({ jsonrpc: '2.0', id: null, error: { code: -32700, message: String(err) } }));
+                    const status = err && err.statusCode === 413 ? 413 : 400;
+                    const code = status === 413 ? -32600 : -32700;
+                    res.writeHead(status, { 'Content-Type': 'application/json; charset=utf-8' });
+                    res.end(
+                        JSON.stringify({
+                            jsonrpc: '2.0',
+                            id: null,
+                            error: { code, message: String((err && err.message) || err) },
+                        })
+                    );
                 }
                 return;
             }
@@ -675,10 +987,23 @@ function startHubServer() {
             res.end(JSON.stringify({ error: 'Not found' }));
         });
 
+        server.headersTimeout = 10000;
+        server.requestTimeout = 30000;
+        server.keepAliveTimeout = 5000;
+
         server.on('upgrade', (req, socket) => {
+            if (!isAllowedHost(req.headers.host)) {
+                socket.destroy();
+                return;
+            }
             const url = new URL(req.url || '/', `http://${HOST}:${PORT}`);
             const key = req.headers['sec-websocket-key'];
-            if (!key || url.pathname !== '/ws' || !isAllowedBrowserOrigin(req.headers.origin)) {
+            if (
+                !key ||
+                url.pathname !== '/ws' ||
+                (req.headers.origin && !isAllowedBrowserOrigin(req.headers.origin)) ||
+                !isValidToken(extractRequestToken(req, url))
+            ) {
                 socket.destroy();
                 return;
             }
@@ -690,7 +1015,7 @@ function startHubServer() {
                 `Sec-WebSocket-Accept: ${accept}`,
             ];
             if (req.headers.origin) {
-                headers.push(`Access-Control-Allow-Origin: ${req.headers.origin}`);
+                headers.push(`Access-Control-Allow-Origin: ${normalizeOrigin(req.headers.origin)}`);
                 headers.push('Access-Control-Allow-Private-Network: true');
             }
             headers.push('\r\n');
@@ -731,6 +1056,11 @@ function startStdioMcpLoop() {
     };
 
     process.stdin.on('data', async (chunk) => {
+        if (buffer.length + chunk.length > MAX_STDIO_MESSAGE_BYTES) {
+            buffer = Buffer.alloc(0);
+            writeReply({ jsonrpc: '2.0', id: null, error: { code: -32600, message: 'Message too large' } });
+            return;
+        }
         buffer = Buffer.concat([buffer, chunk]);
 
         while (buffer.length > 0) {
@@ -746,6 +1076,11 @@ function startStdioMcpLoop() {
                     continue;
                 }
                 const bodyLen = Number(match[1]);
+                if (!Number.isSafeInteger(bodyLen) || bodyLen < 0 || bodyLen > MAX_STDIO_MESSAGE_BYTES) {
+                    buffer = Buffer.alloc(0);
+                    writeReply({ jsonrpc: '2.0', id: null, error: { code: -32600, message: 'Message too large' } });
+                    return;
+                }
                 const totalLen = headerEnd + 4 + bodyLen;
                 if (buffer.length < totalLen) return;
                 const bodyText = buffer.subarray(headerEnd + 4, totalLen).toString('utf8');
@@ -812,6 +1147,7 @@ async function ensureDaemonRunning() {
 
 async function main() {
     const args = process.argv.slice(2);
+    initAuthFromCli(args);
     const cmd = args[0] || '';
 
     if (cmd === '--serve') {
@@ -838,7 +1174,7 @@ async function main() {
                         JSON.stringify(
                             {
                                 ...check.data,
-                                mcpHttpUrl: `http://${HOST}:${PORT}/mcp`,
+                                mcpHttpUrl: buildMcpHttpUrl(),
                                 nodePath: process.execPath,
                                 scriptPath: __filename,
                             },
@@ -855,7 +1191,7 @@ async function main() {
             JSON.stringify(
                 {
                     ...(finalCheck.data || {}),
-                    mcpHttpUrl: `http://${HOST}:${PORT}/mcp`,
+                    mcpHttpUrl: buildMcpHttpUrl(),
                     nodePath: process.execPath,
                     scriptPath: __filename,
                 },
@@ -873,7 +1209,7 @@ async function main() {
                 JSON.stringify(
                     {
                         ...(health.data || {}),
-                        mcpHttpUrl: `http://${HOST}:${PORT}/mcp`,
+                        mcpHttpUrl: buildMcpHttpUrl(),
                         nodePath: process.execPath,
                         scriptPath: __filename,
                     },
@@ -888,7 +1224,7 @@ async function main() {
                         ok: false,
                         running: false,
                         port: PORT,
-                        mcpHttpUrl: `http://${HOST}:${PORT}/mcp`,
+                        mcpHttpUrl: buildMcpHttpUrl(),
                         nodePath: process.execPath,
                         scriptPath: __filename,
                     },
@@ -917,6 +1253,8 @@ async function main() {
                 outPath = args[++i];
             } else if (args[i] === '--args-file' && i + 1 < args.length) {
                 argsFile = args[++i];
+            } else if ((args[i] === '--token' || args[i] === '--origin') && i + 1 < args.length) {
+                i++;
             } else if (args[i] === '--stdin') {
                 useStdin = true;
             } else if (!args[i].startsWith('--')) {
@@ -950,7 +1288,7 @@ async function main() {
             const pngBytes = Buffer.from(obj.previewPngBase64, 'base64');
             const targetFile = outPath
                 ? path.resolve(outPath)
-                : path.join(require('node:os').tmpdir(), 'banner-mcp-preview.png');
+                : path.join(os.tmpdir(), 'banner-mcp-preview.png');
             fs.writeFileSync(targetFile, pngBytes);
             obj.previewPngSavedTo = targetFile;
             obj.previewPngBytes = pngBytes.length;
