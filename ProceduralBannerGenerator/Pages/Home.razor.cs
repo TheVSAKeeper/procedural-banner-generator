@@ -49,29 +49,6 @@ public sealed partial class Home(
 
     private string AgentPrompt => mcp.BuildAgentPrompt();
 
-    protected override async Task OnInitializedAsync()
-    {
-        var bytes = await http.GetByteArrayAsync("Bender-Black.otf");
-        using var fontData = SKData.CreateCopy(bytes);
-        _typeface = SKTypeface.FromData(fontData);
-
-        var loaded = await profiles.LoadAsync(CaptureState());
-        ApplyState(loaded);
-        await mcp.EnsureTokenAsync();
-        Render();
-
-        _dotNetRef = DotNetObjectReference.Create(this);
-        try
-        {
-            var wsUrl = $"ws://127.0.0.1:5219/ws?token={Uri.EscapeDataString(mcp.Token)}";
-            await js.InvokeVoidAsync("bannerMcp.bind", _dotNetRef, wsUrl, mcp.Token);
-        }
-        catch
-        {
-            // Мост опционален – при ошибке JS-интеропа редактор продолжает работать автономно.
-        }
-    }
-
     public async ValueTask DisposeAsync()
     {
         _renderDebounce?.Cancel();
@@ -130,6 +107,51 @@ public sealed partial class Home(
 
         await InvokeAsync(StateHasChanged);
         return result.ResponseJson;
+    }
+
+    protected override async Task OnInitializedAsync()
+    {
+        var bytes = await http.GetByteArrayAsync("Bender-Black.otf");
+        using var fontData = SKData.CreateCopy(bytes);
+        _typeface = SKTypeface.FromData(fontData);
+
+        var loaded = await profiles.LoadAsync(CaptureState());
+        ApplyState(loaded);
+        await mcp.EnsureTokenAsync();
+        Render();
+
+        _dotNetRef = DotNetObjectReference.Create(this);
+        try
+        {
+            var wsUrl = $"ws://127.0.0.1:5219/ws?token={Uri.EscapeDataString(mcp.Token)}";
+            await js.InvokeVoidAsync("bannerMcp.bind", _dotNetRef, wsUrl, mcp.Token);
+        }
+        catch
+        {
+            // Мост опционален – при ошибке JS-интеропа редактор продолжает работать автономно.
+        }
+    }
+
+    private static async Task<SKImage> DecodeImage(IBrowserFile file)
+    {
+        await using var stream = file.OpenReadStream(20 * 1024 * 1024);
+        using var ms = new MemoryStream();
+        await stream.CopyToAsync(ms);
+        using var data = SKData.CreateCopy(ms.ToArray());
+        using var codec = SKCodec.Create(data)
+            ?? throw new InvalidOperationException("формат картинки не распознан");
+
+        if (codec.Info.Width <= 0
+            || codec.Info.Height <= 0
+            || codec.Info.Width > 8192
+            || codec.Info.Height > 8192
+            || ((long)codec.Info.Width * codec.Info.Height) > 33_554_432)
+        {
+            throw new InvalidOperationException($"размер изображения ({codec.Info.Width}x{codec.Info.Height}) превышает допустимый лимит");
+        }
+
+        return SKImage.FromEncodedData(data)
+            ?? throw new InvalidOperationException("формат картинки не распознан");
     }
 
     private async Task CopyAgentPrompt()
@@ -322,28 +344,6 @@ public sealed partial class Home(
         _logo?.Dispose();
         _logo = null;
         Render();
-    }
-
-    private static async Task<SKImage> DecodeImage(IBrowserFile file)
-    {
-        await using var stream = file.OpenReadStream(20 * 1024 * 1024);
-        using var ms = new MemoryStream();
-        await stream.CopyToAsync(ms);
-        using var data = SKData.CreateCopy(ms.ToArray());
-        using var codec = SKCodec.Create(data)
-            ?? throw new InvalidOperationException("формат картинки не распознан");
-
-        if (codec.Info.Width <= 0
-            || codec.Info.Height <= 0
-            || codec.Info.Width > 8192
-            || codec.Info.Height > 8192
-            || ((long)codec.Info.Width * codec.Info.Height) > 33_554_432)
-        {
-            throw new InvalidOperationException($"размер изображения ({codec.Info.Width}x{codec.Info.Height}) превышает допустимый лимит");
-        }
-
-        return SKImage.FromEncodedData(data)
-            ?? throw new InvalidOperationException("формат картинки не распознан");
     }
 
     private void Render()

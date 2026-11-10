@@ -1,4 +1,4 @@
-using System.Text.Json;
+﻿using System.Text.Json;
 
 namespace BannerCore;
 
@@ -9,8 +9,10 @@ namespace BannerCore;
 /// ловит скос версий ядра между независимыми деплоями сайта и бота. Картинки фона/лого сюда не входят
 /// (слишком большие, не перегоняются) – бот рисует процедурно/со своим лого.
 /// </summary>
-/// <param name="Prompt">Пусто – бот только рисует присланный стиль; непусто – правит его через LLM
-/// на присланном стиле (файл стиля бота не трогается) и возвращает результат ссылкой на сайт.</param>
+/// <param name="Prompt">
+/// Пусто – бот только рисует присланный стиль; непусто – правит его через LLM
+/// на присланном стиле (файл стиля бота не трогается) и возвращает результат ссылкой на сайт.
+/// </param>
 public sealed record BannerExport(int Version, string Profile, BannerSpec Spec, BannerStyle Style, string Prompt = "")
 {
     /// <summary>2 – конверт с <see cref="Prompt" />; 1 (сайт без правки промптом) разбирается как пустой промпт.</summary>
@@ -25,18 +27,22 @@ public sealed record BannerExport(int Version, string Profile, BannerSpec Spec, 
         AllowTrailingCommas = true,
     };
 
-    public string ToJson()
-    {
-        return JsonSerializer.Serialize(this, JsonOptions);
-    }
-
     public static BannerExport FromJson(string json)
     {
         var export = JsonSerializer.Deserialize<BannerExport>(json, JsonOptions)
-                     ?? throw new InvalidOperationException("Пустой JSON конверта баннера");
+            ?? throw new InvalidOperationException("Пустой JSON конверта баннера");
+
         if (export.Spec is null || export.Style is null)
+        {
             throw new InvalidOperationException("В конверте баннера отсутствуют spec или style");
+        }
+
         export.Style.Validate();
         return export;
+    }
+
+    public string ToJson()
+    {
+        return JsonSerializer.Serialize(this, JsonOptions);
     }
 }

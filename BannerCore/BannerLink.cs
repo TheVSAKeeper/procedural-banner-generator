@@ -1,10 +1,10 @@
-using System.IO.Compression;
+﻿using System.IO.Compression;
 using System.Text;
 
 namespace BannerCore;
 
 /// <summary>
-/// Кодек стиля для передачи «бот → сайт» через URL Mini App (обратное направление к <see cref="BannerExport"/>,
+/// Кодек стиля для передачи «бот → сайт» через URL Mini App (обратное направление к <see cref="BannerExport" />,
 /// который идёт «сайт → бот» через <c>sendData</c>). Стиль gzip-сжимается и кодируется в base64url, чтобы влезть
 /// в строку ссылки без спецсимволов (<c>+ / =</c> заменены, padding убран). Декод ограничен по размеру —
 /// параметр ссылки управляется пользователем (защита от gzip-бомбы в его же вкладке).
@@ -17,8 +17,11 @@ public static class BannerLink
     {
         var raw = Encoding.UTF8.GetBytes(style.ToJson());
         using var ms = new MemoryStream();
-        using (var gz = new GZipStream(ms, CompressionLevel.SmallestSize, leaveOpen: true))
+        using (var gz = new GZipStream(ms, CompressionLevel.SmallestSize, true))
+        {
             gz.Write(raw, 0, raw.Length);
+        }
+
         return ToBase64Url(ms.ToArray());
     }
 
@@ -35,15 +38,20 @@ public static class BannerLink
         {
             total += read;
             if (total > MaxDecodedBytes)
+            {
                 throw new InvalidOperationException("Стиль в ссылке слишком большой");
+            }
+
             output.Write(buffer, 0, read);
         }
 
         return BannerStyle.FromJson(Encoding.UTF8.GetString(output.GetBuffer(), 0, (int)output.Length));
     }
 
-    private static string ToBase64Url(byte[] bytes) =>
-        Convert.ToBase64String(bytes).TrimEnd('=').Replace('+', '-').Replace('/', '_');
+    private static string ToBase64Url(byte[] bytes)
+    {
+        return Convert.ToBase64String(bytes).TrimEnd('=').Replace('+', '-').Replace('/', '_');
+    }
 
     private static byte[] FromBase64Url(string value)
     {

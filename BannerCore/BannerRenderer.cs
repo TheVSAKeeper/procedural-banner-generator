@@ -49,7 +49,14 @@ public sealed partial class BannerRenderer(BannerStyle style)
         var rng = new Random(spec.Seed);
         var layout = style.Layout;
 
-        DrawBackground(canvas, spec with { Width = width, Height = height }, background);
+        DrawBackground(
+            canvas,
+            spec with
+            {
+                Width = width,
+                Height = height,
+            },
+            background);
 
         var (prefix, main) = SplitTitle(titleText);
 
@@ -59,6 +66,7 @@ public sealed partial class BannerRenderer(BannerStyle style)
             ScaleX = Math.Clamp(layout.TitleScaleX, 0.2f, 3f),
             Subpixel = true,
         };
+
         var maxTitleWidth = width * Math.Clamp(layout.MaxTitleWidthFraction, 0.1f, 1f);
         var totalWidth = MeasureTitleRow(titleFont, prefix, main, out var spaceWidth);
 
@@ -79,32 +87,50 @@ public sealed partial class BannerRenderer(BannerStyle style)
 
         var centerX = width / 2f;
         var titleBaseline = height * Math.Clamp(layout.TitleBaselineFraction, -0.5f, 1.5f);
-        var subBaseline = titleBaseline + titleSize * Math.Clamp(layout.SubtitleBaselineOffsetFactor, -1f, 3f);
-        var titleLeft = centerX - totalWidth / 2;
+        var subBaseline = titleBaseline + (titleSize * Math.Clamp(layout.SubtitleBaselineOffsetFactor, -1f, 3f));
+        var titleLeft = centerX - (totalWidth / 2);
         titleFont.MeasureText(main, out var mainBounds);
 
-        var plate = new SKRect(titleLeft - titleSize * Math.Clamp(layout.PlateSidePaddingFactor, 0f, 3f),
-            titleBaseline + mainBounds.Top - titleSize * Math.Clamp(layout.PlateTopPaddingFactor, 0f, 3f),
-            titleLeft + totalWidth + titleSize * Math.Clamp(layout.PlateSidePaddingFactor, 0f, 3f),
-            titleBaseline + titleSize * Math.Clamp(layout.PlateBottomFactor, 0.05f, 4f));
+        var plate = new SKRect(
+            titleLeft - (titleSize * Math.Clamp(layout.PlateSidePaddingFactor, 0f, 3f)),
+            titleBaseline + mainBounds.Top - (titleSize * Math.Clamp(layout.PlateTopPaddingFactor, 0f, 3f)),
+            titleLeft + totalWidth + (titleSize * Math.Clamp(layout.PlateSidePaddingFactor, 0f, 3f)),
+            titleBaseline + (titleSize * Math.Clamp(layout.PlateBottomFactor, 0.05f, 4f)));
 
         var bandHeight = subFont.Size * Math.Clamp(layout.BandHeightFactor, 0.05f, 5f);
-        var bandCenterY = subBaseline + (subBounds.Top + subBounds.Bottom) / 2;
-        var band = new SKRect(centerX - subWidth / 2 - subFont.Size * Math.Clamp(layout.BandLeftPaddingFactor, 0f, 5f),
-            bandCenterY - bandHeight / 2,
-            centerX + subWidth / 2 + subFont.Size * Math.Clamp(layout.BandRightPaddingFactor, 0f, 5f),
-            bandCenterY + bandHeight / 2);
+        var bandCenterY = subBaseline + ((subBounds.Top + subBounds.Bottom) / 2);
+        var band = new SKRect(
+            centerX - (subWidth / 2) - (subFont.Size * Math.Clamp(layout.BandLeftPaddingFactor, 0f, 5f)),
+            bandCenterY - (bandHeight / 2),
+            centerX + (subWidth / 2) + (subFont.Size * Math.Clamp(layout.BandRightPaddingFactor, 0f, 5f)),
+            bandCenterY + (bandHeight / 2));
 
         canvas.Save();
         canvas.RotateDegrees(Math.Clamp(layout.RotationDegrees, -10f, 10f), centerX, plate.MidY);
 
         DrawBlackPlate(canvas, plate, spec.Seed, rng);
-        DrawPrefixSmear(canvas, plate, titleFont, prefix, titleLeft, titleBaseline, titleSize, spec.Seed,
+        DrawPrefixSmear(
+            canvas,
+            plate,
+            titleFont,
+            prefix,
+            titleLeft,
+            titleBaseline,
+            titleSize,
+            spec.Seed,
             rng);
 
         DrawChipsAndSplatter(canvas, plate, rng);
         DrawGreenBand(canvas, band, spec.Seed, rng);
-        DrawTitleRow(canvas, prefix, main, titleFont, titleLeft, titleBaseline, spaceWidth, titleSize,
+        DrawTitleRow(
+            canvas,
+            prefix,
+            main,
+            titleFont,
+            titleLeft,
+            titleBaseline,
+            spaceWidth,
+            titleSize,
             rng);
 
         DrawSubtitle(canvas, subtitleText, subFont, centerX, subBaseline, subWidth, subBounds, rng);
@@ -126,13 +152,6 @@ public sealed partial class BannerRenderer(BannerStyle style)
         return data.ToArray();
     }
 
-    private static string TruncateText(string? value, int maxLength)
-    {
-        if (string.IsNullOrEmpty(value))
-            return string.Empty;
-        return value.Length <= maxLength ? value : value[..maxLength];
-    }
-
     /// <summary>
     /// Отделяет ведущий номер выпуска («290.» / «290:» / «290») от остального заголовка:
     /// номер потом рендерится зелёным 3D, основной текст – белым.
@@ -150,6 +169,16 @@ public sealed partial class BannerRenderer(BannerStyle style)
         return match.Groups[1].Success
             ? (match.Groups[1].Value, match.Groups[2].Value)
             : (match.Groups[3].Value, match.Groups[4].Value);
+    }
+
+    private static string TruncateText(string? value, int maxLength)
+    {
+        if (string.IsNullOrEmpty(value))
+        {
+            return string.Empty;
+        }
+
+        return value.Length <= maxLength ? value : value[..maxLength];
     }
 
     [GeneratedRegex(@"^(\d+[.:])\s*(.+)$|^(\d+)\s+(.+)$")]
@@ -170,7 +199,9 @@ public sealed partial class BannerRenderer(BannerStyle style)
     {
         using var paint = new SKPaint
         {
-            Shader = SKShader.CreateLinearGradient(new(0, 0), new(0, height),
+            Shader = SKShader.CreateLinearGradient(
+                new(0, 0),
+                new(0, height),
                 [new(0x3A, 0x3A, 0x3A), new(0x17, 0x17, 0x17)],
                 SKShaderTileMode.Clamp),
         };
@@ -210,7 +241,10 @@ public sealed partial class BannerRenderer(BannerStyle style)
         var h = image.Height * scale;
         var dest = new SKRect((width - w) / 2, (height - h) / 2, (width + w) / 2, (height + h) / 2);
 
-        using (var paint = new SKPaint { IsAntialias = true })
+        using (var paint = new SKPaint
+        {
+            IsAntialias = true,
+        })
         {
             var blur = Math.Clamp(bg.BlurSigma, 0f, 50f);
             if (blur > 0.01f)
@@ -224,7 +258,11 @@ public sealed partial class BannerRenderer(BannerStyle style)
         var darken = Math.Clamp(bg.DarkenAlpha, 0f, 1f);
         if (darken > 0.001f)
         {
-            using var veil = new SKPaint { Color = new(0, 0, 0, (byte)(darken * 255)) };
+            using var veil = new SKPaint
+            {
+                Color = new(0, 0, 0, (byte)(darken * 255)),
+            };
+
             canvas.DrawRect(0, 0, width, height, veil);
         }
     }
@@ -242,27 +280,57 @@ public sealed partial class BannerRenderer(BannerStyle style)
         var shadowOffsetY = Math.Clamp(s.ShadowOffsetY, -50f, 50f);
         using var shadowPaint = new SKPaint
         {
-            ImageFilter = SKImageFilter.CreateDropShadow(0, shadowOffsetY, shadowBlur, shadowBlur,
+            ImageFilter = SKImageFilter.CreateDropShadow(
+                0,
+                shadowOffsetY,
+                shadowBlur,
+                shadowBlur,
                 new(0, 0, 0, (byte)Math.Clamp(s.ShadowAlpha, 0, 255))),
         };
 
         canvas.SaveLayer(shadowPaint);
 
-        using (var paint = new SKPaint { Color = plateColor, IsAntialias = true })
-        using (var path = Grunge.BrushStrokePath(plate, seed,
-                   plate.Height * s.EdgeAmpFactor, plate.Height * s.EndAmpFactor))
+        using (var paint = new SKPaint
+        {
+            Color = plateColor,
+            IsAntialias = true,
+        })
+        using (var path = Grunge.BrushStrokePath(
+            plate,
+            seed,
+            plate.Height * s.EdgeAmpFactor,
+            plate.Height * s.EndAmpFactor))
         {
             canvas.DrawPath(path, paint);
         }
 
-        Grunge.BrushTeeth(canvas, plate.Left, plate.Top, plate.Bottom, -1, plateColor, rng,
+        Grunge.BrushTeeth(
+            canvas,
+            plate.Left,
+            plate.Top,
+            plate.Bottom,
+            -1,
+            plateColor,
+            rng,
             plate.Height * s.TeethLeftFactor);
 
-        Grunge.BrushTeeth(canvas, plate.Right, plate.Top, plate.Bottom, +1, plateColor, rng,
+        Grunge.BrushTeeth(
+            canvas,
+            plate.Right,
+            plate.Top,
+            plate.Bottom,
+            +1,
+            plateColor,
+            rng,
             plate.Height * s.TeethRightFactor);
 
-        Grunge.Mottle(canvas, plate, rng, StyleColor.Parse(s.MottleColor),
-            s.MottleCount, plate.Height * s.MottleMaxRadiusFactor);
+        Grunge.Mottle(
+            canvas,
+            plate,
+            rng,
+            StyleColor.Parse(s.MottleColor),
+            s.MottleCount,
+            plate.Height * s.MottleMaxRadiusFactor);
 
         Grunge.Distress(canvas, plate, rng, s.DistressDensity);
 
@@ -293,10 +361,15 @@ public sealed partial class BannerRenderer(BannerStyle style)
         var s = style.Smear;
         var prefixWidth = titleFont.MeasureText(prefix);
 
-        DrawGreenSmear(canvas, new(plate.Left - titleSize * s.LeftExtendFactor,
-            plate.Top - titleSize * s.TopExtendFactor,
-            titleLeft + prefixWidth + titleSize * s.RightPadFactor,
-            titleBaseline + titleSize * s.BaselineDropFactor), seed, rng);
+        DrawGreenSmear(
+            canvas,
+            new(
+                plate.Left - (titleSize * s.LeftExtendFactor),
+                plate.Top - (titleSize * s.TopExtendFactor),
+                titleLeft + prefixWidth + (titleSize * s.RightPadFactor),
+                titleBaseline + (titleSize * s.BaselineDropFactor)),
+            seed,
+            rng);
     }
 
     /// <summary>
@@ -311,28 +384,52 @@ public sealed partial class BannerRenderer(BannerStyle style)
 
         canvas.SaveLayer(null);
 
-        using (var paint = new SKPaint { Color = smearColor, IsAntialias = true })
+        using (var paint = new SKPaint
         {
-            using (var path = Grunge.BrushStrokePath(area, seed + 31,
-                       area.Height * s.EdgeAmpFactor, area.Height * s.EndAmpFactor))
+            Color = smearColor,
+            IsAntialias = true,
+        })
+        {
+            using (var path = Grunge.BrushStrokePath(
+                area,
+                seed + 31,
+                area.Height * s.EdgeAmpFactor,
+                area.Height * s.EndAmpFactor))
             {
                 canvas.DrawPath(path, paint);
             }
 
-            var clump = new SKRect(area.Left - area.Height * 0.25f, area.Top + area.Height * 0.15f,
-                area.Left + area.Width * 0.45f, area.Bottom + area.Height * 0.10f);
+            var clump = new SKRect(
+                area.Left - (area.Height * 0.25f),
+                area.Top + (area.Height * 0.15f),
+                area.Left + (area.Width * 0.45f),
+                area.Bottom + (area.Height * 0.10f));
 
-            using (var clumpPath = Grunge.BrushStrokePath(clump, seed + 47,
-                       clump.Height * 0.14f, clump.Height * 0.22f))
+            using (var clumpPath = Grunge.BrushStrokePath(
+                clump,
+                seed + 47,
+                clump.Height * 0.14f,
+                clump.Height * 0.22f))
             {
                 canvas.DrawPath(clumpPath, paint);
             }
         }
 
-        Grunge.BrushTeeth(canvas, area.Left, area.Top, area.Bottom, -1, smearColor, rng,
+        Grunge.BrushTeeth(
+            canvas,
+            area.Left,
+            area.Top,
+            area.Bottom,
+            -1,
+            smearColor,
+            rng,
             area.Height * s.TeethFactor);
 
-        Grunge.Mottle(canvas, area, rng, StyleColor.Parse(s.MottleColor),
+        Grunge.Mottle(
+            canvas,
+            area,
+            rng,
+            StyleColor.Parse(s.MottleColor),
             (int)(area.Width * area.Height / 260f * s.MottleDensity),
             area.Height * s.MottleMaxRadiusFactor);
 
@@ -350,20 +447,39 @@ public sealed partial class BannerRenderer(BannerStyle style)
         var accents = style.Accents;
         var chipsColor = StyleColor.Parse(style.Palette.Chips);
 
-        Grunge.ChipsAlongLine(canvas, new(plate.Left - 10, plate.Top - 4),
-            new(plate.Left + plate.Width * 0.35f, plate.Top - 4), chipsColor, rng,
-            accents.ChipsLeftCount, accents.ChipsSpread);
+        Grunge.ChipsAlongLine(
+            canvas,
+            new(plate.Left - 10, plate.Top - 4),
+            new(plate.Left + (plate.Width * 0.35f), plate.Top - 4),
+            chipsColor,
+            rng,
+            accents.ChipsLeftCount,
+            accents.ChipsSpread);
 
-        Grunge.ChipsAlongLine(canvas, new(plate.Right - plate.Width * 0.25f, plate.Top - 4),
-            new(plate.Right + 14, plate.Top + 2), chipsColor, rng,
-            accents.ChipsRightCount, accents.ChipsSpread);
+        Grunge.ChipsAlongLine(
+            canvas,
+            new(plate.Right - (plate.Width * 0.25f), plate.Top - 4),
+            new(plate.Right + 14, plate.Top + 2),
+            chipsColor,
+            rng,
+            accents.ChipsRightCount,
+            accents.ChipsSpread);
 
-        Grunge.Splatter(canvas, new(plate.Right - plate.Width * 0.08f, plate.MidY), chipsColor, rng,
-            accents.SplatterGreenCount, plate.Height * 0.45f);
+        Grunge.Splatter(
+            canvas,
+            new(plate.Right - (plate.Width * 0.08f), plate.MidY),
+            chipsColor,
+            rng,
+            accents.SplatterGreenCount,
+            plate.Height * 0.45f);
 
-        Grunge.Splatter(canvas, new(plate.Left - 24, plate.Bottom - 8),
-            StyleColor.Parse(style.Palette.DarkSplatter), rng,
-            accents.SplatterDarkCount, plate.Height * 0.40f);
+        Grunge.Splatter(
+            canvas,
+            new(plate.Left - 24, plate.Bottom - 8),
+            StyleColor.Parse(style.Palette.DarkSplatter),
+            rng,
+            accents.SplatterDarkCount,
+            plate.Height * 0.40f);
     }
 
     /// <summary>
@@ -379,26 +495,50 @@ public sealed partial class BannerRenderer(BannerStyle style)
         canvas.SaveLayer(null);
 
         using (var paint = new SKPaint
-               {
-                   IsAntialias = true,
-                   Shader = SKShader.CreateLinearGradient(new(0, band.Top), new(0, band.Bottom),
-                       [bandTop, bandBottom],
-                       SKShaderTileMode.Clamp),
-               })
-        using (var path = Grunge.BrushStrokePath(band, seed + 57,
-                   band.Height * s.EdgeAmpFactor, band.Height * s.EndAmpFactor))
+        {
+            IsAntialias = true,
+            Shader = SKShader.CreateLinearGradient(
+                new(0, band.Top),
+                new(0, band.Bottom),
+                [bandTop, bandBottom],
+                SKShaderTileMode.Clamp),
+        })
+        using (var path = Grunge.BrushStrokePath(
+            band,
+            seed + 57,
+            band.Height * s.EdgeAmpFactor,
+            band.Height * s.EndAmpFactor))
         {
             canvas.DrawPath(path, paint);
         }
 
-        Grunge.BrushTeeth(canvas, band.Left, band.Top, band.Bottom, -1, bandBottom, rng,
+        Grunge.BrushTeeth(
+            canvas,
+            band.Left,
+            band.Top,
+            band.Bottom,
+            -1,
+            bandBottom,
+            rng,
             band.Height * s.TeethLeftFactor);
 
-        Grunge.BrushTeeth(canvas, band.Right, band.Top, band.Bottom, +1, bandTop, rng,
+        Grunge.BrushTeeth(
+            canvas,
+            band.Right,
+            band.Top,
+            band.Bottom,
+            +1,
+            bandTop,
+            rng,
             band.Height * s.TeethRightFactor);
 
-        Grunge.Mottle(canvas, band, rng, StyleColor.Parse(s.MottleColor),
-            (int)(band.Width / 9f * s.MottleDensity), band.Height * s.MottleMaxRadiusFactor);
+        Grunge.Mottle(
+            canvas,
+            band,
+            rng,
+            StyleColor.Parse(s.MottleColor),
+            (int)(band.Width / 9f * s.MottleDensity),
+            band.Height * s.MottleMaxRadiusFactor);
 
         Grunge.Distress(canvas, band, rng, s.DistressDensity);
 
@@ -426,7 +566,15 @@ public sealed partial class BannerRenderer(BannerStyle style)
         if (prefix is not null)
         {
             var prefixWidth = font.MeasureText(prefix, out var prefixBounds);
-            Draw3DText(canvas, prefix, font, x, baseline, prefixBounds, size, rng,
+            Draw3DText(
+                canvas,
+                prefix,
+                font,
+                x,
+                baseline,
+                prefixBounds,
+                size,
+                rng,
                 [
                     StyleColor.Parse(palette.GreenFaceTop),
                     StyleColor.Parse(palette.GreenFaceMid),
@@ -439,7 +587,15 @@ public sealed partial class BannerRenderer(BannerStyle style)
         }
 
         font.MeasureText(main, out var mainBounds);
-        Draw3DText(canvas, main, font, x, baseline, mainBounds, size, rng,
+        Draw3DText(
+            canvas,
+            main,
+            font,
+            x,
+            baseline,
+            mainBounds,
+            size,
+            rng,
             [
                 StyleColor.Parse(palette.WhiteFaceTop),
                 StyleColor.Parse(palette.WhiteFaceMid),
@@ -473,43 +629,57 @@ public sealed partial class BannerRenderer(BannerStyle style)
 
         canvas.SaveLayer(null);
 
-        using (var extrude = new SKPaint { Color = extrudeColor, IsAntialias = true })
+        using (var extrude = new SKPaint
+        {
+            Color = extrudeColor,
+            IsAntialias = true,
+        })
         {
             var steps = Math.Clamp((int)MathF.Ceiling(depth), 1, 128);
 
             for (var i = steps; i >= 1; i--)
             {
-                canvas.DrawText(text, x + i * stepX, baseline + i, SKTextAlign.Left, font, extrude);
+                canvas.DrawText(text, x + (i * stepX), baseline + i, SKTextAlign.Left, font, extrude);
             }
         }
 
         using (var stroke = new SKPaint
-               {
-                   Color = StyleColor.Parse(style.Palette.TitleStroke),
-                   IsAntialias = true,
-                   Style = SKPaintStyle.Stroke,
-                   StrokeWidth = size * Math.Clamp(fx.StrokeWidthFactor, 0f, 0.5f),
-                   StrokeJoin = SKStrokeJoin.Round,
-               })
+        {
+            Color = StyleColor.Parse(style.Palette.TitleStroke),
+            IsAntialias = true,
+            Style = SKPaintStyle.Stroke,
+            StrokeWidth = size * Math.Clamp(fx.StrokeWidthFactor, 0f, 0.5f),
+            StrokeJoin = SKStrokeJoin.Round,
+        })
         {
             canvas.DrawText(text, x, baseline, SKTextAlign.Left, font, stroke);
         }
 
         using (var fill = new SKPaint
-               {
-                   IsAntialias = true,
-                   Shader = SKShader.CreateLinearGradient(new(0, baseline + bounds.Top), new(0, baseline),
-                       faceColors, [0f, Math.Clamp(fx.FaceGradientMidStop, 0.05f, 0.95f), 1f],
-                       SKShaderTileMode.Clamp),
-               })
+        {
+            IsAntialias = true,
+            Shader = SKShader.CreateLinearGradient(
+                new(0, baseline + bounds.Top),
+                new(0, baseline),
+                faceColors,
+                [0f, Math.Clamp(fx.FaceGradientMidStop, 0.05f, 0.95f), 1f],
+                SKShaderTileMode.Clamp),
+        })
         {
             canvas.DrawText(text, x, baseline, SKTextAlign.Left, font, fill);
         }
 
-        var textRect = new SKRect(x + bounds.Left, baseline + bounds.Top,
-            x + bounds.Right + depth, baseline + depth);
+        var textRect = new SKRect(
+            x + bounds.Left,
+            baseline + bounds.Top,
+            x + bounds.Right + depth,
+            baseline + depth);
 
-        Grunge.Mottle(canvas, textRect, rng, mottleColor,
+        Grunge.Mottle(
+            canvas,
+            textRect,
+            rng,
+            mottleColor,
             (int)(textRect.Width * textRect.Height / 480f * fx.MottleDensity),
             size * fx.MottleMaxRadiusFactor);
 
@@ -534,12 +704,16 @@ public sealed partial class BannerRenderer(BannerStyle style)
     {
         canvas.SaveLayer(null);
 
-        using (var fill = new SKPaint { Color = StyleColor.Parse(style.Palette.SubtitleText), IsAntialias = true })
+        using (var fill = new SKPaint
+        {
+            Color = StyleColor.Parse(style.Palette.SubtitleText),
+            IsAntialias = true,
+        })
         {
             canvas.DrawText(subtitle, centerX, baseline, SKTextAlign.Center, font, fill);
         }
 
-        var textRect = new SKRect(centerX - width / 2, baseline + bounds.Top, centerX + width / 2, baseline + bounds.Bottom);
+        var textRect = new SKRect(centerX - (width / 2), baseline + bounds.Top, centerX + (width / 2), baseline + bounds.Bottom);
         Grunge.Distress(canvas, textRect, rng, style.Band.SubtitleDistressDensity);
 
         canvas.Restore();
@@ -565,16 +739,20 @@ public sealed partial class BannerRenderer(BannerStyle style)
             Subpixel = true,
         };
 
-        var baseline = subBaseline + titleSize * t.BaselineGapFactor;
+        var baseline = subBaseline + (titleSize * t.BaselineGapFactor);
         var width = font.MeasureText(tagline, out var bounds);
 
         canvas.SaveLayer(null);
-        using (var fill = new SKPaint { Color = StyleColor.Parse(t.Color), IsAntialias = true })
+        using (var fill = new SKPaint
+        {
+            Color = StyleColor.Parse(t.Color),
+            IsAntialias = true,
+        })
         {
             canvas.DrawText(tagline, centerX, baseline, SKTextAlign.Center, font, fill);
         }
 
-        var rect = new SKRect(centerX - width / 2, baseline + bounds.Top, centerX + width / 2, baseline + bounds.Bottom);
+        var rect = new SKRect(centerX - (width / 2), baseline + bounds.Top, centerX + (width / 2), baseline + bounds.Bottom);
         Grunge.Distress(canvas, rect, rng, t.DistressDensity);
         canvas.Restore();
     }
@@ -599,7 +777,12 @@ public sealed partial class BannerRenderer(BannerStyle style)
         var dest = new SKRect(left, top, left + w, top + h);
 
         var alpha = (byte)(Math.Clamp(l.Opacity, 0f, 1f) * 255);
-        using var paint = new SKPaint { IsAntialias = true, Color = SKColors.White.WithAlpha(alpha) };
+        using var paint = new SKPaint
+        {
+            IsAntialias = true,
+            Color = SKColors.White.WithAlpha(alpha),
+        };
+
         canvas.DrawImage(logo, dest, SKSamplingOptions.Default, paint);
     }
 }

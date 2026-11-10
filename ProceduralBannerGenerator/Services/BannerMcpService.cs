@@ -137,6 +137,228 @@ public sealed class BannerMcpService(BannerProfileService profiles, IJSRuntime j
         }
     }
 
+    private static object McpGetStyleGuide()
+    {
+        return new
+        {
+            summary = "Декларативный стиль баннера (BannerStyle) из 10 секций. В update_template и create_template достаточно передавать только изменяемые секции и поля.",
+            conventions = new
+            {
+                colors = "#RRGGBB или #RRGGBBAA (альфа в конце, CSS-порядок)",
+                fractions = "*Fraction – доля от размеров кадра (Width/Height)",
+                factors = "*Factor – доля от кегля заголовка (или высоты соответствующего элемента)",
+                numericPrefix = "Ведущий номер в заголовке ('290. ...') автоматически рисуется зелёным 3D с подмазкой Smear, остальной текст – белым 3D",
+            },
+            sections = new
+            {
+                palette =
+                    "Чистые цвета: грани зелёного номера (greenFaceTop/Mid/Bottom, greenExtrude), грани белого заголовка (whiteFaceTop/Mid/Bottom, whiteExtrude), полоса (bandTop/Bottom), подмазка (smear), плашка (plate), подзаголовок (subtitleText), обводка (titleStroke), чипсы и брызги (chips, darkSplatter).",
+                layout = "Кегли, конденс, базовая линия, наклон блока (rotationDegrees -10..10), поля плашки и полосы.",
+                titleFx =
+                    "Глубина (extrudeDepthFactor) и наклон (extrudeStepX) 3D-экструзии, обводка (strokeWidthFactor), градиент грани, зерно (mottle) и выгрызы (distressDensity).",
+                plate = "Чёрная рваная плашка за заголовком: рваность краёв/торцов, зубья кисти слева/справа, пятна краски, выгрызы, тень.",
+                smear = "Зелёная подмазка под номером выпуска: enabled, вынос за плашку, рваность, зубья, зерно, выгрызы.",
+                band = "Полоса под подзаголовком: рваность краёв/торцов, зубья слева/справа, зерно, выгрызы, потёртость текста подзаголовка.",
+                accents = "Чипсы вдоль верхней кромки (chipsLeftCount, chipsRightCount, chipsSpread), зелёная крошка (splatterGreenCount), тёмные брызги (splatterDarkCount).",
+                tagline = "Третья строка под подзаголовком: enabled, sizeFactor, color, baselineGapFactor, scaleX, distressDensity.",
+                logo = "Логотип в углу: enabled, corner (tl|tr|bl|br), sizeFraction, opacity, marginFraction.",
+                background = "Обработка загруженной картинки-фона: darkenAlpha (0..1), blurSigma (0..30).",
+            },
+            defaultStyle = new BannerStyle(),
+        };
+    }
+
+    private static SavedState ApplyPartialPatch(SavedState current, JsonObject args, out IReadOnlyList<string> changedSections)
+    {
+        var next = current;
+
+        if (TryGetPropertyIgnoreCase(args, "spec", out var specNode) && specNode is not null)
+        {
+            if (specNode is not JsonObject specObj)
+            {
+                throw new InvalidOperationException("Поле 'spec' должно быть JSON-объектом.");
+            }
+
+            foreach (var kv in specObj)
+            {
+                if (!AllowedSpecKeys.Contains(kv.Key))
+                {
+                    throw new InvalidOperationException($"Неизвестное поле spec '{kv.Key}'. Допустимые поля: title, subtitle, tagline, seed, width, height, transparent.");
+                }
+            }
+
+            if (GetString(specObj, "title") is { } title)
+            {
+                next = next with
+                {
+                    Title = title,
+                };
+            }
+
+            if (GetString(specObj, "subtitle") is { } subtitle)
+            {
+                next = next with
+                {
+                    Subtitle = subtitle,
+                };
+            }
+
+            if (TryGetPropertyIgnoreCase(specObj, "tagline", out var tagNode))
+            {
+                next = next with
+                {
+                    Tagline = tagNode?.GetValue<string>() ?? "",
+                };
+            }
+
+            if (GetInt(specObj, "seed") is { } seed)
+            {
+                next = next with
+                {
+                    Seed = seed,
+                };
+            }
+
+            if (GetInt(specObj, "width") is { } width)
+            {
+                next = next with
+                {
+                    Width = Math.Clamp(width, 320, 3840),
+                };
+            }
+
+            if (GetInt(specObj, "height") is { } height)
+            {
+                next = next with
+                {
+                    Height = Math.Clamp(height, 180, 2160),
+                };
+            }
+
+            if (TryGetPropertyIgnoreCase(specObj, "transparent", out var trNode) && trNode is not null)
+            {
+                next = next with
+                {
+                    Transparent = GetBool(specObj, "transparent", next.Transparent),
+                };
+            }
+        }
+
+        var beforeStyle = next.Style;
+        if (TryGetPropertyIgnoreCase(args, "style", out var styleNode) && styleNode is not null)
+        {
+            if (styleNode is not JsonObject stylePatch)
+            {
+                throw new InvalidOperationException("Поле 'style' должно быть JSON-объектом.");
+            }
+
+            var targetObj = JsonNode.Parse(beforeStyle.ToJson())!.AsObject();
+            MergeJsonObjects(targetObj, stylePatch);
+            var mergedStyle = BannerStyle.FromJson(targetObj.ToJsonString());
+            mergedStyle.Validate();
+            next = next with
+            {
+                Style = mergedStyle,
+            };
+        }
+
+        changedSections = BannerProfileService.GetChangedSections(beforeStyle, next.Style);
+        return next;
+    }
+
+    private static void MergeJsonObjects(JsonObject target, JsonObject patch)
+    {
+        foreach (var kv in patch)
+        {
+            if (kv.Value is null)
+            {
+                continue;
+            }
+
+            var existingKey = target.Select(p => p.Key)
+                .FirstOrDefault(k => string.Equals(k, kv.Key, StringComparison.OrdinalIgnoreCase));
+
+            if (existingKey is null)
+            {
+                throw new InvalidOperationException($"Неизвестное поле или секция стиля '{kv.Key}'. Вызовите get_style_guide для списка секций и ручек.");
+            }
+
+            if (target[existingKey] is JsonObject targetChild)
+            {
+                if (kv.Value is not JsonObject patchChild)
+                {
+                    throw new InvalidOperationException($"Секция стиля '{existingKey}' должна быть JSON-объектом.");
+                }
+
+                MergeJsonObjects(targetChild, patchChild);
+            }
+            else
+            {
+                target[existingKey] = kv.Value.DeepClone();
+            }
+        }
+    }
+
+    private static bool TryGetPropertyIgnoreCase(JsonObject obj, string key, out JsonNode? value)
+    {
+        foreach (var kv in obj)
+        {
+            if (string.Equals(kv.Key, key, StringComparison.OrdinalIgnoreCase))
+            {
+                value = kv.Value;
+                return true;
+            }
+        }
+
+        value = null;
+        return false;
+    }
+
+    private static string? GetString(JsonObject obj, string key)
+    {
+        return TryGetPropertyIgnoreCase(obj, key, out var node) && node is not null ? node.GetValue<string>() : null;
+    }
+
+    private static int? GetInt(JsonObject obj, string key)
+    {
+        if (!TryGetPropertyIgnoreCase(obj, key, out var node) || node is null)
+        {
+            return null;
+        }
+
+        if (node is JsonValue jv && jv.TryGetValue<int>(out var directInt))
+        {
+            return directInt;
+        }
+
+        if (node.GetValueKind() == JsonValueKind.String && int.TryParse(node.GetValue<string>(), out var parsed))
+        {
+            return parsed;
+        }
+
+        throw new InvalidOperationException($"Поле '{key}' должно быть целым числом.");
+    }
+
+    private static bool GetBool(JsonObject obj, string key, bool defaultValue)
+    {
+        if (!TryGetPropertyIgnoreCase(obj, key, out var node) || node is null)
+        {
+            return defaultValue;
+        }
+
+        if (node is JsonValue jv && jv.TryGetValue<bool>(out var directBool))
+        {
+            return directBool;
+        }
+
+        if (node.GetValueKind() == JsonValueKind.String && bool.TryParse(node.GetValue<string>(), out var parsed))
+        {
+            return parsed;
+        }
+
+        throw new InvalidOperationException($"Поле '{key}' должно быть булевым значением (true/false).");
+    }
+
     private object McpListTemplates()
     {
         return new
@@ -167,37 +389,6 @@ public sealed class BannerMcpService(BannerProfileService profiles, IJSRuntime j
         var entry = FindProfile(args, true)!;
         var includePreview = GetBool(args, "includePreviewPng", false);
         return BuildTemplatePayload(entry, null, includePreview, renderPreviewBase64);
-    }
-
-    private static object McpGetStyleGuide()
-    {
-        return new
-        {
-            summary = "Декларативный стиль баннера (BannerStyle) из 10 секций. В update_template и create_template достаточно передавать только изменяемые секции и поля.",
-            conventions = new
-            {
-                colors = "#RRGGBB или #RRGGBBAA (альфа в конце, CSS-порядок)",
-                fractions = "*Fraction – доля от размеров кадра (Width/Height)",
-                factors = "*Factor – доля от кегля заголовка (или высоты соответствующего элемента)",
-                numericPrefix = "Ведущий номер в заголовке ('290. ...') автоматически рисуется зелёным 3D с подмазкой Smear, остальной текст – белым 3D",
-            },
-            sections = new
-            {
-                palette =
-                    "Чистые цвета: грани зелёного номера (greenFaceTop/Mid/Bottom, greenExtrude), грани белого заголовка (whiteFaceTop/Mid/Bottom, whiteExtrude), полоса (bandTop/Bottom), подмазка (smear), плашка (plate), подзаголовок (subtitleText), обводка (titleStroke), чипсы и брызги (chips, darkSplatter).",
-                layout = "Кегли, конденс, базовая линия, наклон блока (rotationDegrees -10..10), поля плашки и полосы.",
-                titleFx =
-                    "Глубина (extrudeDepthFactor) и наклон (extrudeStepX) 3D-экструзии, обводка (strokeWidthFactor), градиент грани, зерно (mottle) и выгрызы (distressDensity).",
-                plate = "Чёрная рваная плашка за заголовком: рваность краёв/торцов, зубья кисти слева/справа, пятна краски, выгрызы, тень.",
-                smear = "Зелёная подмазка под номером выпуска: enabled, вынос за плашку, рваность, зубья, зерно, выгрызы.",
-                band = "Полоса под подзаголовком: рваность краёв/торцов, зубья слева/справа, зерно, выгрызы, потёртость текста подзаголовка.",
-                accents = "Чипсы вдоль верхней кромки (chipsLeftCount, chipsRightCount, chipsSpread), зелёная крошка (splatterGreenCount), тёмные брызги (splatterDarkCount).",
-                tagline = "Третья строка под подзаголовком: enabled, sizeFactor, color, baselineGapFactor, scaleX, distressDensity.",
-                logo = "Логотип в углу: enabled, corner (tl|tr|bl|br), sizeFraction, opacity, marginFraction.",
-                background = "Обработка загруженной картинки-фона: darkenAlpha (0..1), blurSigma (0..30).",
-            },
-            defaultStyle = new BannerStyle(),
-        };
     }
 
     private async Task<(object Payload, SavedState? ActiveState, string Notice)> McpCreateTemplateAsync(
@@ -472,137 +663,6 @@ public sealed class BannerMcpService(BannerProfileService profiles, IJSRuntime j
         return profiles.FindProfile(id, name, required);
     }
 
-    private static SavedState ApplyPartialPatch(SavedState current, JsonObject args, out IReadOnlyList<string> changedSections)
-    {
-        var next = current;
-
-        if (TryGetPropertyIgnoreCase(args, "spec", out var specNode) && specNode is not null)
-        {
-            if (specNode is not JsonObject specObj)
-            {
-                throw new InvalidOperationException("Поле 'spec' должно быть JSON-объектом.");
-            }
-
-            foreach (var kv in specObj)
-            {
-                if (!AllowedSpecKeys.Contains(kv.Key))
-                {
-                    throw new InvalidOperationException($"Неизвестное поле spec '{kv.Key}'. Допустимые поля: title, subtitle, tagline, seed, width, height, transparent.");
-                }
-            }
-
-            if (GetString(specObj, "title") is { } title)
-            {
-                next = next with
-                {
-                    Title = title,
-                };
-            }
-
-            if (GetString(specObj, "subtitle") is { } subtitle)
-            {
-                next = next with
-                {
-                    Subtitle = subtitle,
-                };
-            }
-
-            if (TryGetPropertyIgnoreCase(specObj, "tagline", out var tagNode))
-            {
-                next = next with
-                {
-                    Tagline = tagNode?.GetValue<string>() ?? "",
-                };
-            }
-
-            if (GetInt(specObj, "seed") is { } seed)
-            {
-                next = next with
-                {
-                    Seed = seed,
-                };
-            }
-
-            if (GetInt(specObj, "width") is { } width)
-            {
-                next = next with
-                {
-                    Width = Math.Clamp(width, 320, 3840),
-                };
-            }
-
-            if (GetInt(specObj, "height") is { } height)
-            {
-                next = next with
-                {
-                    Height = Math.Clamp(height, 180, 2160),
-                };
-            }
-
-            if (TryGetPropertyIgnoreCase(specObj, "transparent", out var trNode) && trNode is not null)
-            {
-                next = next with
-                {
-                    Transparent = GetBool(specObj, "transparent", next.Transparent),
-                };
-            }
-        }
-
-        var beforeStyle = next.Style;
-        if (TryGetPropertyIgnoreCase(args, "style", out var styleNode) && styleNode is not null)
-        {
-            if (styleNode is not JsonObject stylePatch)
-            {
-                throw new InvalidOperationException("Поле 'style' должно быть JSON-объектом.");
-            }
-
-            var targetObj = JsonNode.Parse(beforeStyle.ToJson())!.AsObject();
-            MergeJsonObjects(targetObj, stylePatch);
-            var mergedStyle = BannerStyle.FromJson(targetObj.ToJsonString());
-            mergedStyle.Validate();
-            next = next with
-            {
-                Style = mergedStyle,
-            };
-        }
-
-        changedSections = BannerProfileService.GetChangedSections(beforeStyle, next.Style);
-        return next;
-    }
-
-    private static void MergeJsonObjects(JsonObject target, JsonObject patch)
-    {
-        foreach (var kv in patch)
-        {
-            if (kv.Value is null)
-            {
-                continue;
-            }
-
-            var existingKey = target.Select(p => p.Key)
-                .FirstOrDefault(k => string.Equals(k, kv.Key, StringComparison.OrdinalIgnoreCase));
-
-            if (existingKey is null)
-            {
-                throw new InvalidOperationException($"Неизвестное поле или секция стиля '{kv.Key}'. Вызовите get_style_guide для списка секций и ручек.");
-            }
-
-            if (target[existingKey] is JsonObject targetChild)
-            {
-                if (kv.Value is not JsonObject patchChild)
-                {
-                    throw new InvalidOperationException($"Секция стиля '{existingKey}' должна быть JSON-объектом.");
-                }
-
-                MergeJsonObjects(targetChild, patchChild);
-            }
-            else
-            {
-                target[existingKey] = kv.Value.DeepClone();
-            }
-        }
-    }
-
     private object BuildTemplatePayload(
         ProfileEntry entry,
         IReadOnlyList<string>? changedSections,
@@ -642,65 +702,5 @@ public sealed class BannerMcpService(BannerProfileService profiles, IJSRuntime j
             style = s.Style,
             previewPngBase64 = includePreview ? renderPreviewBase64(s) : null,
         };
-    }
-
-    private static bool TryGetPropertyIgnoreCase(JsonObject obj, string key, out JsonNode? value)
-    {
-        foreach (var kv in obj)
-        {
-            if (string.Equals(kv.Key, key, StringComparison.OrdinalIgnoreCase))
-            {
-                value = kv.Value;
-                return true;
-            }
-        }
-
-        value = null;
-        return false;
-    }
-
-    private static string? GetString(JsonObject obj, string key)
-    {
-        return TryGetPropertyIgnoreCase(obj, key, out var node) && node is not null ? node.GetValue<string>() : null;
-    }
-
-    private static int? GetInt(JsonObject obj, string key)
-    {
-        if (!TryGetPropertyIgnoreCase(obj, key, out var node) || node is null)
-        {
-            return null;
-        }
-
-        if (node is JsonValue jv && jv.TryGetValue<int>(out var directInt))
-        {
-            return directInt;
-        }
-
-        if (node.GetValueKind() == JsonValueKind.String && int.TryParse(node.GetValue<string>(), out var parsed))
-        {
-            return parsed;
-        }
-
-        throw new InvalidOperationException($"Поле '{key}' должно быть целым числом.");
-    }
-
-    private static bool GetBool(JsonObject obj, string key, bool defaultValue)
-    {
-        if (!TryGetPropertyIgnoreCase(obj, key, out var node) || node is null)
-        {
-            return defaultValue;
-        }
-
-        if (node is JsonValue jv && jv.TryGetValue<bool>(out var directBool))
-        {
-            return directBool;
-        }
-
-        if (node.GetValueKind() == JsonValueKind.String && bool.TryParse(node.GetValue<string>(), out var parsed))
-        {
-            return parsed;
-        }
-
-        throw new InvalidOperationException($"Поле '{key}' должно быть булевым значением (true/false).");
     }
 }

@@ -1,4 +1,4 @@
-using System.Text.Json;
+﻿using System.Text.Json;
 
 namespace BannerCore;
 
@@ -15,6 +15,13 @@ namespace BannerCore;
 /// </summary>
 public sealed record BannerStyle
 {
+    private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web)
+    {
+        WriteIndented = true,
+        ReadCommentHandling = JsonCommentHandling.Skip,
+        AllowTrailingCommas = true,
+    };
+
     public PaletteStyle Palette { get; init; } = new();
     public LayoutStyle Layout { get; init; } = new();
     public TitleFxStyle TitleFx { get; init; } = new();
@@ -26,31 +33,32 @@ public sealed record BannerStyle
     public LogoStyle Logo { get; init; } = new();
     public BackgroundStyle Background { get; init; } = new();
 
-    private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web)
+    public static BannerStyle FromJson(string json)
     {
-        WriteIndented = true,
-        ReadCommentHandling = JsonCommentHandling.Skip,
-        AllowTrailingCommas = true,
-    };
+        var style = JsonSerializer.Deserialize<BannerStyle>(json, JsonOptions)
+            ?? throw new InvalidOperationException("Пустой JSON стиля");
+
+        style.Validate();
+        return style;
+    }
 
     public string ToJson()
     {
         return JsonSerializer.Serialize(this, JsonOptions);
     }
 
-    public static BannerStyle FromJson(string json)
-    {
-        var style = JsonSerializer.Deserialize<BannerStyle>(json, JsonOptions)
-                    ?? throw new InvalidOperationException("Пустой JSON стиля");
-        style.Validate();
-        return style;
-    }
-
     public void Validate()
     {
-        if (Palette is null || Layout is null || TitleFx is null || Plate is null
-            || Smear is null || Band is null || Accents is null || Tagline is null
-            || Logo is null || Background is null)
+        if (Palette is null
+            || Layout is null
+            || TitleFx is null
+            || Plate is null
+            || Smear is null
+            || Band is null
+            || Accents is null
+            || Tagline is null
+            || Logo is null
+            || Background is null)
         {
             throw new InvalidOperationException("Секции стиля не могут быть пустыми (null).");
         }

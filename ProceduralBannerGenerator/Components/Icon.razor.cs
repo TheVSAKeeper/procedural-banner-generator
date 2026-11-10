@@ -4,13 +4,6 @@ namespace ProceduralBannerGenerator.Components;
 
 public sealed partial class Icon
 {
-    [Parameter]
-    [EditorRequired]
-    public string Name { get; set; } = "";
-
-    [Parameter]
-    public string? Class { get; set; }
-
     // ponytail: статичный набор – вшиваем только реально используемые иконки, не тащим весь набор/пакет.
     private static readonly Dictionary<string, string> Paths = new()
     {
@@ -36,4 +29,11 @@ public sealed partial class Icon
         ["check"] = "<path d='M20 6 9 17l-5-5' />",
         ["undo"] = "<path d='M9 14 4 9l5-5' /><path d='M4 9h10.5a5.5 5.5 0 0 1 5.5 5.5v0a5.5 5.5 0 0 1-5.5 5.5H11' />",
     };
+
+    [Parameter]
+    [EditorRequired]
+    public string Name { get; set; } = "";
+
+    [Parameter]
+    public string? Class { get; set; }
 }

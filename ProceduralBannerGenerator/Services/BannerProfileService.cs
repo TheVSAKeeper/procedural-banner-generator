@@ -24,6 +24,124 @@ public sealed class BannerProfileService(IJSRuntime js)
 
     public IReadOnlyList<HistoryEntry> ActiveHistory => ActiveProfile?.History ?? [];
 
+    public static void PushHistory(ProfileEntry profile, string label, SavedState previousState)
+    {
+        profile.History.Add(
+            new()
+            {
+                Label = label,
+                Timestamp = DateTime.Now.ToString("HH:mm:ss"),
+                State = previousState,
+            });
+
+        while (profile.History.Count > MaxHistorySteps)
+        {
+            profile.History.RemoveAt(0);
+        }
+    }
+
+    public static bool HasTemplateChanged(SavedState a, SavedState b)
+    {
+        return a.Title != b.Title
+            || a.Subtitle != b.Subtitle
+            || (a.Tagline ?? "") != (b.Tagline ?? "")
+            || a.Seed != b.Seed
+            || a.Width != b.Width
+            || a.Height != b.Height
+            || a.Transparent != b.Transparent
+            || a.Style != b.Style;
+    }
+
+    public static string DescribeChange(string prefix, SavedState before, SavedState after, string? customSummary = null)
+    {
+        var parts = new List<string>();
+        if (before.Title != after.Title || before.Subtitle != after.Subtitle || (before.Tagline ?? "") != (after.Tagline ?? ""))
+        {
+            parts.Add("текст");
+        }
+
+        if (before.Seed != after.Seed)
+        {
+            parts.Add("seed");
+        }
+
+        if (before.Width != after.Width || before.Height != after.Height || before.Transparent != after.Transparent)
+        {
+            parts.Add("кадр");
+        }
+
+        parts.AddRange(GetChangedSections(before.Style, after.Style));
+
+        var suffix = parts.Count > 0 ? $" ({string.Join(", ", parts)})" : "";
+        if (!string.IsNullOrWhiteSpace(customSummary))
+        {
+            return $"MCP: {customSummary.Trim()}{suffix}";
+        }
+
+        return $"{prefix}{suffix}";
+    }
+
+    public static IReadOnlyList<string> GetChangedSections(BannerStyle before, BannerStyle after)
+    {
+        var changed = new List<string>();
+        if (before.Palette != after.Palette)
+        {
+            changed.Add(nameof(BannerStyle.Palette));
+        }
+
+        if (before.Layout != after.Layout)
+        {
+            changed.Add(nameof(BannerStyle.Layout));
+        }
+
+        if (before.TitleFx != after.TitleFx)
+        {
+            changed.Add(nameof(BannerStyle.TitleFx));
+        }
+
+        if (before.Plate != after.Plate)
+        {
+            changed.Add(nameof(BannerStyle.Plate));
+        }
+
+        if (before.Smear != after.Smear)
+        {
+            changed.Add(nameof(BannerStyle.Smear));
+        }
+
+        if (before.Band != after.Band)
+        {
+            changed.Add(nameof(BannerStyle.Band));
+        }
+
+        if (before.Accents != after.Accents)
+        {
+            changed.Add(nameof(BannerStyle.Accents));
+        }
+
+        if (before.Tagline != after.Tagline)
+        {
+            changed.Add(nameof(BannerStyle.Tagline));
+        }
+
+        if (before.Logo != after.Logo)
+        {
+            changed.Add(nameof(BannerStyle.Logo));
+        }
+
+        if (before.Background != after.Background)
+        {
+            changed.Add(nameof(BannerStyle.Background));
+        }
+
+        return changed;
+    }
+
+    public static string NewId()
+    {
+        return Guid.NewGuid().ToString("N")[..8];
+    }
+
     public void ResetManualCoalesce()
     {
         _lastManualPushTicks = 0;
@@ -63,20 +181,6 @@ public sealed class BannerProfileService(IJSRuntime js)
 
             return ActiveProfile?.State ?? fallbackState;
         }
-    }
-
-    private SavedState SeedSingleProfile(SavedState state)
-    {
-        var entry = new ProfileEntry
-        {
-            Id = NewId(),
-            Name = "Локальный",
-            State = state,
-        };
-
-        _profiles = [entry];
-        ActiveId = entry.Id;
-        return state;
     }
 
     public ProfileEntry EnsureActiveProfile(SavedState fallbackState)
@@ -356,124 +460,6 @@ public sealed class BannerProfileService(IJSRuntime js)
         }
     }
 
-    public static void PushHistory(ProfileEntry profile, string label, SavedState previousState)
-    {
-        profile.History.Add(
-            new()
-            {
-                Label = label,
-                Timestamp = DateTime.Now.ToString("HH:mm:ss"),
-                State = previousState,
-            });
-
-        while (profile.History.Count > MaxHistorySteps)
-        {
-            profile.History.RemoveAt(0);
-        }
-    }
-
-    public static bool HasTemplateChanged(SavedState a, SavedState b)
-    {
-        return a.Title != b.Title
-            || a.Subtitle != b.Subtitle
-            || (a.Tagline ?? "") != (b.Tagline ?? "")
-            || a.Seed != b.Seed
-            || a.Width != b.Width
-            || a.Height != b.Height
-            || a.Transparent != b.Transparent
-            || a.Style != b.Style;
-    }
-
-    public static string DescribeChange(string prefix, SavedState before, SavedState after, string? customSummary = null)
-    {
-        var parts = new List<string>();
-        if (before.Title != after.Title || before.Subtitle != after.Subtitle || (before.Tagline ?? "") != (after.Tagline ?? ""))
-        {
-            parts.Add("текст");
-        }
-
-        if (before.Seed != after.Seed)
-        {
-            parts.Add("seed");
-        }
-
-        if (before.Width != after.Width || before.Height != after.Height || before.Transparent != after.Transparent)
-        {
-            parts.Add("кадр");
-        }
-
-        parts.AddRange(GetChangedSections(before.Style, after.Style));
-
-        var suffix = parts.Count > 0 ? $" ({string.Join(", ", parts)})" : "";
-        if (!string.IsNullOrWhiteSpace(customSummary))
-        {
-            return $"MCP: {customSummary.Trim()}{suffix}";
-        }
-
-        return $"{prefix}{suffix}";
-    }
-
-    public static IReadOnlyList<string> GetChangedSections(BannerStyle before, BannerStyle after)
-    {
-        var changed = new List<string>();
-        if (before.Palette != after.Palette)
-        {
-            changed.Add(nameof(BannerStyle.Palette));
-        }
-
-        if (before.Layout != after.Layout)
-        {
-            changed.Add(nameof(BannerStyle.Layout));
-        }
-
-        if (before.TitleFx != after.TitleFx)
-        {
-            changed.Add(nameof(BannerStyle.TitleFx));
-        }
-
-        if (before.Plate != after.Plate)
-        {
-            changed.Add(nameof(BannerStyle.Plate));
-        }
-
-        if (before.Smear != after.Smear)
-        {
-            changed.Add(nameof(BannerStyle.Smear));
-        }
-
-        if (before.Band != after.Band)
-        {
-            changed.Add(nameof(BannerStyle.Band));
-        }
-
-        if (before.Accents != after.Accents)
-        {
-            changed.Add(nameof(BannerStyle.Accents));
-        }
-
-        if (before.Tagline != after.Tagline)
-        {
-            changed.Add(nameof(BannerStyle.Tagline));
-        }
-
-        if (before.Logo != after.Logo)
-        {
-            changed.Add(nameof(BannerStyle.Logo));
-        }
-
-        if (before.Background != after.Background)
-        {
-            changed.Add(nameof(BannerStyle.Background));
-        }
-
-        return changed;
-    }
-
-    public static string NewId()
-    {
-        return Guid.NewGuid().ToString("N")[..8];
-    }
-
     public string NextProfileName()
     {
         for (var n = _profiles.Count + 1;; n++)
@@ -509,5 +495,19 @@ public sealed class BannerProfileService(IJSRuntime js)
                 return candidate;
             }
         }
+    }
+
+    private SavedState SeedSingleProfile(SavedState state)
+    {
+        var entry = new ProfileEntry
+        {
+            Id = NewId(),
+            Name = "Локальный",
+            State = state,
+        };
+
+        _profiles = [entry];
+        ActiveId = entry.Id;
+        return state;
     }
 }

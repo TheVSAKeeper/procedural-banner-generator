@@ -26,26 +26,26 @@ public static class Grunge
 
         for (var x = rect.Left; x <= rect.Right; x += step)
         {
-            points.Add(new(x, rect.Top + Fbm(x / scale, seed) * edgeAmp));
+            points.Add(new(x, rect.Top + (Fbm(x / scale, seed) * edgeAmp)));
         }
 
         for (var y = rect.Top; y <= rect.Bottom; y += step)
         {
-            points.Add(new(rect.Right + Fbm(y / (scale * 0.4f), seed + 7) * endAmp, y));
+            points.Add(new(rect.Right + (Fbm(y / (scale * 0.4f), seed + 7) * endAmp), y));
         }
 
         for (var x = rect.Right; x >= rect.Left; x -= step)
         {
-            points.Add(new(x, rect.Bottom + Fbm(x / scale, seed + 13) * edgeAmp));
+            points.Add(new(x, rect.Bottom + (Fbm(x / scale, seed + 13) * edgeAmp)));
         }
 
         for (var y = rect.Bottom; y >= rect.Top; y -= step)
         {
-            points.Add(new(rect.Left + Fbm(y / (scale * 0.4f), seed + 23) * endAmp, y));
+            points.Add(new(rect.Left + (Fbm(y / (scale * 0.4f), seed + 23) * endAmp), y));
         }
 
         using var builder = new SKPathBuilder();
-        builder.AddPoly(points.ToArray(), true);
+        builder.AddPoly(points.ToArray());
         return builder.Detach();
     }
 
@@ -63,35 +63,55 @@ public static class Grunge
         Random rng,
         float maxLength)
     {
-        using var paint = new SKPaint { IsAntialias = true };
-        using var bite = new SKPaint { Color = SKColors.Black, IsAntialias = true, BlendMode = SKBlendMode.DstOut };
+        using var paint = new SKPaint
+        {
+            IsAntialias = true,
+        };
+
+        using var bite = new SKPaint
+        {
+            Color = SKColors.Black,
+            IsAntialias = true,
+            BlendMode = SKBlendMode.DstOut,
+        };
+
         var cappedLength = Math.Clamp(maxLength, 0f, 1000f);
         var iterations = 0;
 
         for (var y = top; y < bottom && iterations < 512; iterations++)
         {
-            var thickness = 2f + (float)rng.NextDouble() * 2.5f;
+            var thickness = 2f + ((float)rng.NextDouble() * 2.5f);
             // распределение к середине: зубья плотные и чанковые, а не редкие нити
             var r = (float)rng.NextDouble();
-            var length = cappedLength * (0.15f + 0.85f * r * r);
-            var x2 = edgeX + direction * length;
+            var length = cappedLength * (0.15f + (0.85f * r * r));
+            var x2 = edgeX + (direction * length);
 
             paint.Color = color.WithAlpha((byte)(170 + rng.Next(86)));
-            canvas.DrawRect(new(MathF.Min(edgeX - direction * 4, x2), y,
-                MathF.Max(edgeX - direction * 4, x2), y + thickness), paint);
+            canvas.DrawRect(
+                new(
+                    MathF.Min(edgeX - (direction * 4), x2),
+                    y,
+                    MathF.Max(edgeX - (direction * 4), x2),
+                    y + thickness),
+                paint);
 
             // встречный выгрыз внутрь – торец становится «прозрачно-рваным», а не бахромой
             if (rng.NextDouble() < 0.45)
             {
                 var biteLength = (float)(rng.NextDouble() * rng.NextDouble()) * cappedLength * 0.5f;
-                var biteX2 = edgeX - direction * biteLength;
+                var biteX2 = edgeX - (direction * biteLength);
                 var biteY = y + thickness;
 
-                canvas.DrawRect(new(MathF.Min(edgeX, biteX2), biteY,
-                    MathF.Max(edgeX, biteX2), biteY + 1.5f + (float)rng.NextDouble() * 2f), bite);
+                canvas.DrawRect(
+                    new(
+                        MathF.Min(edgeX, biteX2),
+                        biteY,
+                        MathF.Max(edgeX, biteX2),
+                        biteY + 1.5f + ((float)rng.NextDouble() * 2f)),
+                    bite);
             }
 
-            y += thickness + (float)rng.NextDouble() * 1.2f;
+            y += thickness + ((float)rng.NextDouble() * 1.2f);
         }
     }
 
@@ -103,15 +123,20 @@ public static class Grunge
     {
         var cappedCount = Math.Clamp(count, 0, 2000);
         var cappedRadius = Math.Clamp(maxRadius, 0f, 500f);
-        using var paint = new SKPaint { Color = color, IsAntialias = true, BlendMode = SKBlendMode.SrcATop };
+        using var paint = new SKPaint
+        {
+            Color = color,
+            IsAntialias = true,
+            BlendMode = SKBlendMode.SrcATop,
+        };
 
         for (var i = 0; i < cappedCount; i++)
         {
-            var x = area.Left + (float)rng.NextDouble() * area.Width;
-            var y = area.Top + (float)rng.NextDouble() * area.Height;
+            var x = area.Left + ((float)rng.NextDouble() * area.Width);
+            var y = area.Top + ((float)rng.NextDouble() * area.Height);
             // зерно вытянуто по горизонтали – направление мазка кисти, а не круглый «горошек»
-            var rx = (float)(rng.NextDouble() * rng.NextDouble()) * cappedRadius + 1.5f;
-            var ry = rx * (0.25f + (float)rng.NextDouble() * 0.45f);
+            var rx = ((float)(rng.NextDouble() * rng.NextDouble()) * cappedRadius) + 1.5f;
+            var ry = rx * (0.25f + ((float)rng.NextDouble() * 0.45f));
 
             canvas.DrawOval(x, y, rx, ry, paint);
         }
@@ -125,7 +150,11 @@ public static class Grunge
     {
         var cappedCount = Math.Clamp(count, 0, 500);
         var cappedSpread = Math.Clamp(spread, 0f, 1000f);
-        using var paint = new SKPaint { Color = color, IsAntialias = true };
+        using var paint = new SKPaint
+        {
+            Color = color,
+            IsAntialias = true,
+        };
 
         for (var i = 0; i < cappedCount; i++)
         {
@@ -135,12 +164,16 @@ public static class Grunge
 
             if (rng.NextDouble() < 0.25)
             {
-                Chip(canvas, new(center.X + dx, center.Y + dy), color,
-                    2f + (float)rng.NextDouble() * 4f, rng);
+                Chip(
+                    canvas,
+                    new(center.X + dx, center.Y + dy),
+                    color,
+                    2f + ((float)rng.NextDouble() * 4f),
+                    rng);
             }
             else
             {
-                var radius = (float)(rng.NextDouble() * rng.NextDouble()) * 5f + 0.8f;
+                var radius = ((float)(rng.NextDouble() * rng.NextDouble()) * 5f) + 0.8f;
                 canvas.DrawCircle(center.X + dx, center.Y + dy, radius, paint);
             }
         }
@@ -164,10 +197,10 @@ public static class Grunge
         for (var i = 0; i < cappedCount; i++)
         {
             var t = (float)rng.NextDouble();
-            var x = from.X + (to.X - from.X) * t + (float)(rng.NextDouble() - 0.5) * cappedSpread;
-            var y = from.Y + (to.Y - from.Y) * t + (float)(rng.NextDouble() - 0.5) * cappedSpread;
+            var x = from.X + ((to.X - from.X) * t) + ((float)(rng.NextDouble() - 0.5) * cappedSpread);
+            var y = from.Y + ((to.Y - from.Y) * t) + ((float)(rng.NextDouble() - 0.5) * cappedSpread);
 
-            Chip(canvas, new(x, y), color, 2f + (float)rng.NextDouble() * 4.5f, rng);
+            Chip(canvas, new(x, y), color, 2f + ((float)rng.NextDouble() * 4.5f), rng);
         }
     }
 
@@ -180,13 +213,18 @@ public static class Grunge
         var cappedDensity = Math.Clamp(density, 0f, 10f);
         var dots = Math.Clamp((int)(MathF.Max(0f, area.Width) * MathF.Max(0f, area.Height) / 550f * cappedDensity), 0, 4000);
 
-        using var bite = new SKPaint { Color = SKColors.Black, IsAntialias = true, BlendMode = SKBlendMode.DstOut };
+        using var bite = new SKPaint
+        {
+            Color = SKColors.Black,
+            IsAntialias = true,
+            BlendMode = SKBlendMode.DstOut,
+        };
 
         for (var i = 0; i < dots; i++)
         {
-            var x = area.Left + (float)rng.NextDouble() * area.Width;
-            var y = area.Top + (float)rng.NextDouble() * area.Height;
-            var radius = (float)(rng.NextDouble() * rng.NextDouble()) * 2.2f + 0.4f;
+            var x = area.Left + ((float)rng.NextDouble() * area.Width);
+            var y = area.Top + ((float)rng.NextDouble() * area.Height);
+            var radius = ((float)(rng.NextDouble() * rng.NextDouble()) * 2.2f) + 0.4f;
 
             canvas.DrawCircle(x, y, radius, bite);
         }
@@ -204,22 +242,26 @@ public static class Grunge
 
         for (var i = 0; i < scratches; i++)
         {
-            var x = area.Left + (float)rng.NextDouble() * area.Width;
-            var y = area.Top + (float)rng.NextDouble() * area.Height;
-            var length = 10f + (float)rng.NextDouble() * 28f;
+            var x = area.Left + ((float)rng.NextDouble() * area.Width);
+            var y = area.Top + ((float)rng.NextDouble() * area.Height);
+            var length = 10f + ((float)rng.NextDouble() * 28f);
             var angle = (float)(rng.NextDouble() * Math.PI);
 
-            canvas.DrawLine(x, y, x + length * MathF.Cos(angle), y + length * MathF.Sin(angle), scratch);
+            canvas.DrawLine(x, y, x + (length * MathF.Cos(angle)), y + (length * MathF.Sin(angle)), scratch);
         }
     }
 
     private static void Chip(SKCanvas canvas, SKPoint center, SKColor color, float size, Random rng)
     {
-        using var paint = new SKPaint { Color = color, IsAntialias = true };
+        using var paint = new SKPaint
+        {
+            Color = color,
+            IsAntialias = true,
+        };
 
         canvas.Save();
-        canvas.RotateDegrees((float)rng.NextDouble() * 20f - 10f, center.X, center.Y);
-        canvas.DrawRect(center.X - size / 2, center.Y - size / 2, size, size, paint);
+        canvas.RotateDegrees(((float)rng.NextDouble() * 20f) - 10f, center.X, center.Y);
+        canvas.DrawRect(center.X - (size / 2), center.Y - (size / 2), size, size, paint);
         canvas.Restore();
     }
 
@@ -233,7 +275,7 @@ public static class Grunge
 
         for (var o = 0; o < octaves; o++)
         {
-            sum += amplitude * ValueNoise(t * frequency, seed + o * 101);
+            sum += amplitude * ValueNoise(t * frequency, seed + (o * 101));
             norm += amplitude;
             amplitude *= 0.5f;
             frequency *= 2.1f;
@@ -246,18 +288,18 @@ public static class Grunge
     {
         var i = (int)MathF.Floor(t);
         var f = t - i;
-        var s = f * f * (3 - 2 * f); // smoothstep
+        var s = f * f * (3 - (2 * f)); // smoothstep
 
-        return Hash(i, seed) * (1 - s) + Hash(i + 1, seed) * s;
+        return (Hash(i, seed) * (1 - s)) + (Hash(i + 1, seed) * s);
     }
 
     private static float Hash(int i, int seed)
     {
         unchecked
         {
-            var n = i * 374761393 + seed * 668265263;
-            n = n << 13 ^ n;
-            return 1f - (n * (n * n * 15731 + 789221) + 1376312589 & 0x7fffffff) / 1073741824f;
+            var n = (i * 374761393) + (seed * 668265263);
+            n = (n << 13) ^ n;
+            return 1f - ((((n * ((n * n * 15731) + 789221)) + 1376312589) & 0x7fffffff) / 1073741824f);
         }
     }
 }
