@@ -120,10 +120,10 @@
 ## Собрать из исходников
 
 Нужен .NET 10 SDK (`10.0.100` или новее). Ядро рендера выделено в библиотеку `BannerCore`, веб-интерфейс – проект Blazor
-WebAssembly в корне репозитория.
+WebAssembly в папке `ProceduralBannerGenerator`.
 
 ```powershell
-dotnet run --project ProceduralBannerGenerator.csproj
+dotnet run --project ProceduralBannerGenerator
 ```
 
 Проверка сборки решения (`BannerCore` + `ProceduralBannerGenerator`):

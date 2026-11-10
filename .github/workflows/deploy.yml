@@ -1,4 +1,4 @@
-name: Deploy to GitHub Pages
+﻿name: Deploy to GitHub Pages
 
 on:
   push:
@@ -28,7 +28,7 @@ jobs:
         run: dotnet workload install wasm-tools
 
       - name: Publish
-        run: dotnet publish ProceduralBannerGenerator.csproj -c Release -o release
+        run: dotnet publish ProceduralBannerGenerator/ProceduralBannerGenerator.csproj -c Release -o release
 
       # Project pages live under /<repo>/ — переписываем base под подпуть:
       #  - index.html: <base href>
