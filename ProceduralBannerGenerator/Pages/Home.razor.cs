@@ -29,6 +29,9 @@ public sealed partial class Home(
     private SKImage? Logo => _images.GetValueOrDefault(ActiveId).Logo;
 
     private SKTypeface? _typeface;
+    private sealed record PreviewKey(BannerSpec Spec, BannerStyle Style, SKImage? Background, SKImage? Logo);
+
+    private readonly Dictionary<PreviewKey, string> _previews = [];
     private string? _imgSrc;
     private string? _exportHref;
     private string? _error;
@@ -66,6 +69,7 @@ public sealed partial class Home(
             image.Logo?.Dispose();
         }
         _images.Clear();
+        _previews.Clear();
         _typeface?.Dispose();
 
         try
@@ -164,6 +168,7 @@ public sealed partial class Home(
             using var fontData = SKData.CreateCopy(bytes);
             _typeface = SKTypeface.FromData(fontData)
                 ?? throw new InvalidOperationException("Не удалось прочитать шрифт");
+            _previews.Clear();
             Render();
         }
         catch (Exception ex)
@@ -277,7 +282,12 @@ public sealed partial class Home(
 
     private async Task SelectProfileAsync(string id)
     {
-        await FlushActiveProfileAsync();
+        if (id == ActiveId || Profiles.All(p => p.Id != id))
+        {
+            return;
+        }
+
+        await FlushActiveProfileAsync(render: false);
         var selected = await profiles.SelectProfileAsync(id);
         if (selected is null)
         {
@@ -327,10 +337,10 @@ public sealed partial class Home(
         Render();
     }
 
-    private async Task FlushActiveProfileAsync()
+    private async Task FlushActiveProfileAsync(bool render = true)
     {
         _renderDebounce?.Cancel();
-        if (await profiles.FlushActiveProfileAsync(CaptureState()))
+        if (await profiles.FlushActiveProfileAsync(CaptureState()) && render)
         {
             Render();
             StateHasChanged();
@@ -471,19 +481,7 @@ public sealed partial class Home(
 
         try
         {
-            var spec = new BannerSpec
-            {
-                Title = string.IsNullOrWhiteSpace(_title) ? " " : _title,
-                Subtitle = _subtitle ?? "",
-                Tagline = string.IsNullOrWhiteSpace(_tagline) ? null : _tagline,
-                Seed = _seed,
-                Width = Math.Clamp(_width, 320, 3840),
-                Height = Math.Clamp(_height, 180, 2160),
-                Transparent = _transparent,
-            };
-
-            var png = new BannerRenderer(_style).RenderPng(spec, _typeface, Background, Logo);
-            _imgSrc = "data:image/png;base64," + Convert.ToBase64String(png);
+            _imgSrc = "data:image/png;base64," + RenderStateToBase64(CaptureState(), ActiveId);
             _error = null;
         }
         catch (Exception ex)
@@ -511,8 +509,27 @@ public sealed partial class Home(
         };
 
         var images = _images.GetValueOrDefault(profileId);
+        var key = new PreviewKey(spec, s.Style, images.Background, images.Logo);
+        if (_previews.TryGetValue(key, out var cached))
+        {
+            return cached;
+        }
+
         var png = new BannerRenderer(s.Style).RenderPng(spec, _typeface, images.Background, images.Logo);
-        return Convert.ToBase64String(png);
+        var base64 = Convert.ToBase64String(png);
+        const int maxEntries = 8;
+        const int maxChars = 8 * 1024 * 1024;
+        if (base64.Length <= maxChars)
+        {
+            while (_previews.Count >= maxEntries || _previews.Values.Sum(p => p.Length) + base64.Length > maxChars)
+            {
+                _previews.Remove(_previews.Keys.First());
+            }
+
+            _previews[key] = base64;
+        }
+
+        return base64;
     }
 
     private async Task ImportStyle(InputFileChangeEventArgs e)
