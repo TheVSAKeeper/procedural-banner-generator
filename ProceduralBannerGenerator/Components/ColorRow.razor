@@ -11,5 +11,9 @@
            value="@Alpha"
            @oninput="OnAlpha"
            aria-label="@($"{Label}: прозрачность")" />
-    <span class="phex">@Value</span>
+    <input class="phex" value="@_hex" @oninput="OnHex" aria-label="@($"{Label}: HEX/RGBA")" aria-invalid="@(_hexError is not null ? "true" : "false")" />
+    @if (_hexError is not null)
+    {
+        <span class="validation-message" role="alert">@_hexError</span>
+    }
 </div>

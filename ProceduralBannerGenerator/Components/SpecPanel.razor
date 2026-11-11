@@ -28,18 +28,25 @@
         <div class="row">
             <label class="sm">Задержка отрисовки, мс<input type="number"
                                                            @bind:get="RenderDebounceMs"
-                                                           @bind:set="RenderDebounceMsChanged.InvokeAsync"
+                                                           @bind:set="OnDebounceInput"
                                                            min="0"
                                                            max="3000"
                                                            step="10" /></label>
+        </div>
+        <div>
             <button type="button"
                     class="toggle @(Transparent ? "on" : null)"
                     @onclick="ToggleTransparent"
-                    aria-pressed="@Transparent"
+                    disabled="@HasBackground"
+                    aria-pressed="@(Transparent ? "true" : "false")"
                     title="Прозрачный фон вместо подложки-градиента">
                 <Icon Name="@(Transparent ? "square-check" : "square")" />
-                Фон
+                Прозрачный фон
             </button>
+            @if (HasBackground)
+            {
+                <p class="hint">Прозрачность недоступна: фон-картинка заменяет подложку. Уберите фон, чтобы включить прозрачность.</p>
+            }
         </div>
     </div>
 </section>

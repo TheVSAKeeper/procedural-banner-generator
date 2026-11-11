@@ -14,6 +14,10 @@
                      IsReady="@(_typeface is not null)"
                      Error="@_error"
                      Notice="@_notice"
+                     FontError="@_fontError"
+                     LoadingFont="@_loadingFont"
+                     OnRetryFont="LoadFontAsync"
+                     OnDismissNotice="DismissNotice"
                      History="@ActiveHistory"
                      OnRender="Render"
                      OnRandomize="Randomize"
@@ -25,6 +29,8 @@
             <ProfilePanel Profiles="@Profiles"
                           ActiveId="@ActiveId"
                           History="@ActiveHistory"
+                          PreserveTextOnSwitch="@profiles.PreserveTextOnSwitch"
+                          PreserveTextOnSwitchChanged="profiles.SetPreserveTextAsync"
                           McpConnected="@_mcpConnected"
                           PromptCopied="@_promptCopied"
                           AgentPrompt="@AgentPrompt"
@@ -44,16 +50,36 @@
                        @bind-Height="_height"
                        @bind-RenderDebounceMs="_renderDebounceMs"
                        @bind-Transparent="_transparent"
+                       HasBackground="@(Background is not null)"
                        OnChange="RequestRender" />
 
+            <section class="panel">
+                <span class="module-head">Фон и логотип</span>
+                <p class="hint">Картинки относятся только к текущему профилю и хранятся до перезагрузки страницы.</p>
+                <div class="image-actions">
+                    <label class="btn btn-ghost">
+                        <Icon Name="image" />
+                        @(Background is null ? "Загрузить фон" : "Сменить фон")
+                        <InputFile OnChange="UploadBackground" accept="image/*" class="visually-hidden-file" />
+                    </label>
+                    @if (Background is not null)
+                    {
+                        <button type="button" class="btn-danger" @onclick="ClearBackground">Убрать фон</button>
+                    }
+                    <label class="btn btn-ghost">
+                        <Icon Name="image" />
+                        @(Logo is null ? "Загрузить логотип" : "Сменить логотип")
+                        <InputFile OnChange="UploadLogo" accept="image/*" class="visually-hidden-file" />
+                    </label>
+                    @if (Logo is not null)
+                    {
+                        <button type="button" class="btn-danger" @onclick="ClearLogo">Убрать логотип</button>
+                    }
+                </div>
+            </section>
+
             <StyleCalibrationPanel @bind-Style="_style"
-                                   @bind-Style:after="RequestRender"
-                                   HasBackground="@(_background is not null)"
-                                   HasLogo="@(_logo is not null)"
-                                   OnUploadBackground="UploadBackground"
-                                   OnClearBackground="ClearBackground"
-                                   OnUploadLogo="UploadLogo"
-                                   OnClearLogo="ClearLogo" />
+                                   @bind-Style:after="RequestRender" />
         </div>
     </div>
 </div>

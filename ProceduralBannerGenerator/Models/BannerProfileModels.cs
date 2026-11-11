@@ -4,8 +4,8 @@ namespace ProceduralBannerGenerator.Models;
 
 public sealed record SavedState
 {
-    public string Title { get; init; } = "";
-    public string Subtitle { get; init; } = "";
+    public string Title { get; init; } = "290. ЛЕДОКОЛ XIX";
+    public string Subtitle { get; init; } = "КОРОЛЬ МАШИННОГО ЗАЛА";
     public string? Tagline { get; init; }
     public int Seed { get; init; } = 290;
     public int Width { get; init; } = 1280;
@@ -32,6 +32,7 @@ public sealed class ProfileEntry
 
 public sealed class ProfileStore
 {
+    public bool PreserveTextOnSwitch { get; set; }
     public string ActiveId { get; set; } = "";
     public List<ProfileEntry> Profiles { get; set; } = [];
 }

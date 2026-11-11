@@ -1,6 +1,5 @@
 ﻿using BannerCore;
 using Microsoft.AspNetCore.Components;
-using Microsoft.AspNetCore.Components.Forms;
 
 namespace ProceduralBannerGenerator.Components;
 
@@ -12,24 +11,6 @@ public sealed partial class StyleCalibrationPanel
 
     [Parameter]
     public EventCallback<BannerStyle> StyleChanged { get; set; }
-
-    [Parameter]
-    public bool HasBackground { get; set; }
-
-    [Parameter]
-    public bool HasLogo { get; set; }
-
-    [Parameter]
-    public EventCallback<InputFileChangeEventArgs> OnUploadBackground { get; set; }
-
-    [Parameter]
-    public EventCallback OnClearBackground { get; set; }
-
-    [Parameter]
-    public EventCallback<InputFileChangeEventArgs> OnUploadLogo { get; set; }
-
-    [Parameter]
-    public EventCallback OnClearLogo { get; set; }
 
     private Task Apply(BannerStyle next)
     {

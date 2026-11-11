@@ -1,4 +1,27 @@
-﻿:root {
+﻿@font-face {
+    font-family: "Roboto Condensed";
+    src: url("../fonts/RobotoCondensed.ttf") format("truetype");
+    font-style: normal;
+    font-weight: 100 900;
+    font-display: swap;
+}
+
+@font-face {
+    font-family: "Roboto Mono";
+    src: url("../fonts/RobotoMono.ttf") format("truetype");
+    font-style: normal;
+    font-weight: 100 700;
+    font-display: swap;
+}
+
+@font-face {
+    font-family: Bender;
+    src: url("../Bender-Black.otf") format("opentype");
+    font-weight: 900;
+    font-display: swap;
+}
+
+:root {
     --bg: #0a0c07;
     --bg-2: #0f1209;
     --panel: #14180d;
@@ -8,14 +31,14 @@
     --acid: #c8e23a;
     --acid-dim: #8a9a1f;
     --amber: #e3ad2c;
-    --danger: #c8512e;
+    --danger: #f08b6e;
     --bone: #ece9d6;
     --bone-dim: #989e7c;
     --mono-ink: #b3bd8f;
 
-    --font-display: "Saira Stencil One", "Saira Condensed", system-ui, sans-serif;
-    --font-body: "Saira Condensed", system-ui, -apple-system, sans-serif;
-    --font-tech: "Chakra Petch", "Saira Condensed", system-ui, sans-serif;
+    --font-display: Bender, "Roboto Condensed", system-ui, sans-serif;
+    --font-body: "Roboto Condensed", system-ui, -apple-system, sans-serif;
+    --font-tech: "Roboto Mono", system-ui, sans-serif;
 
     color-scheme: dark;
 }
@@ -371,7 +394,7 @@ button:disabled {
 }
 
 .btn-danger:hover {
-    color: #fff;
+    color: var(--bg);
     border-color: var(--danger);
     background: var(--danger);
     box-shadow: 0 0 16px rgba(200, 81, 46, 0.4);
@@ -657,12 +680,12 @@ button:disabled {
     display: grid;
     align-items: center;
     margin: 0.28rem 0;
-    grid-template-columns: 11.5rem 1fr 3.6rem;
+    grid-template-columns: minmax(0, 1fr) 5.5rem;
     gap: 0.55rem;
 }
 
 .crow {
-    grid-template-columns: 11.5rem 2.4rem 1fr 4.6rem;
+    grid-template-columns: 2rem minmax(120px, 1fr) 6.5rem;
 }
 
 .prow .pname {
@@ -699,7 +722,9 @@ button:disabled {
 
 .prow input[type=range] {
     width: 100%;
-    height: 16px;
+    height: 24px;
+    min-width: 0;
+    margin: 0;
     cursor: pointer;
     background: transparent;
     -webkit-appearance: none;
@@ -749,8 +774,8 @@ button:disabled {
 }
 
 .prow input[type=checkbox] {
-    width: 1.05rem;
-    height: 1.05rem;
+    width: 24px;
+    height: 24px;
     cursor: pointer;
     justify-self: start;
     accent-color: var(--acid);
@@ -780,6 +805,7 @@ input[type=checkbox] {
 }
 
 .status {
+    overflow-wrap: anywhere;
     font-family: var(--font-body);
     font-size: 0.82rem;
     margin: 0.6rem 0.2rem 0;
@@ -800,11 +826,11 @@ input[type=checkbox] {
 
 @media (max-width: 560px) {
     .prow {
-        grid-template-columns: 1fr 3.6rem;
+        grid-template-columns: minmax(0, 1fr) 5.5rem;
     }
 
     .crow {
-        grid-template-columns: 2.4rem 1fr 4.6rem;
+        grid-template-columns: 2rem minmax(120px, 1fr) 6.5rem;
     }
 
     .prow .pname {
@@ -911,4 +937,124 @@ input[type=checkbox] {
 
 .loading-progress-text:after {
     content: var(--blazor-load-percentage-text, "Загрузка");
+}
+
+.prow .pname {
+    grid-column: 1 / -1;
+}
+
+.crow .phex {
+    min-width: 0;
+    width: 100%;
+    min-height: 28px;
+    padding: 0.2rem;
+    border: 1px solid var(--line-bright);
+    background: var(--bg-2);
+}
+
+.prow .validation-message {
+    grid-column: 1 / -1;
+}
+
+.corner-row select {
+    grid-column: 1 / -1;
+}
+
+select, summary, .pnum {
+    min-height: 28px;
+}
+
+h1[tabindex="-1"]:focus {
+    outline: none;
+}
+
+.grid .check-label {
+    display: flex;
+    flex-direction: row;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+.check-label input {
+    flex: 0 0 24px;
+    width: 24px;
+    height: 24px;
+}
+
+.inline-edit, .image-actions {
+    display: grid;
+    gap: 0.5rem;
+    min-width: 0;
+}
+
+.inline-edit p {
+    margin: 0;
+}
+
+.stage-actions {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.stage-actions > * {
+    min-width: 0;
+    letter-spacing: 0.04em;
+}
+
+.stage-actions .btn-primary {
+    grid-column: 1 / -1;
+}
+
+.stage-actions .reset-style {
+    grid-column: 1 / -1;
+    margin-top: 0.6rem;
+    border-top-width: 2px;
+}
+
+.undo-count {
+    min-width: 4ch;
+    font-variant-numeric: tabular-nums;
+}
+
+.btn.disabled {
+    pointer-events: none;
+    opacity: 0.35;
+}
+
+.notice-close {
+    min-height: 28px;
+    padding: 0.2rem;
+}
+
+#blazor-error-ui {
+    padding-right: 3.5rem;
+}
+
+#blazor-error-ui .reload {
+    color: #0c0f07;
+    font-weight: 700;
+    text-decoration: underline;
+}
+
+#blazor-error-ui .dismiss {
+    min-width: 28px;
+    min-height: 28px;
+    padding: 0.2rem;
+    color: #0c0f07;
+    border-color: #0c0f07;
+    background: transparent;
+}
+
+@media (max-width: 360px) {
+    .crow {
+        grid-template-columns: 2rem minmax(120px, 1fr);
+    }
+
+    .crow .phex {
+        grid-column: 1 / -1;
+    }
+
+    .stage-actions {
+        grid-template-columns: minmax(0, 1fr);
+    }
 }

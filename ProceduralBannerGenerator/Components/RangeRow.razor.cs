@@ -31,9 +31,9 @@ public sealed partial class RangeRow
 
     private Task OnInput(ChangeEventArgs e)
     {
-        if (float.TryParse(e.Value?.ToString(), NumberStyles.Float, CultureInfo.InvariantCulture, out var v))
+        if (float.TryParse(e.Value?.ToString(), NumberStyles.Float, CultureInfo.InvariantCulture, out var v) && float.IsFinite(v))
         {
-            return ValueChanged.InvokeAsync(v);
+            return ValueChanged.InvokeAsync(Math.Clamp(v, Min, Max));
         }
 
         return Task.CompletedTask;

@@ -5,6 +5,8 @@ namespace ProceduralBannerGenerator.Components;
 public sealed partial class SpecPanel
 {
     [Parameter]
+    public bool HasBackground { get; set; }
+    [Parameter]
     public string Title { get; set; } = "";
 
     [Parameter]
@@ -94,6 +96,12 @@ public sealed partial class SpecPanel
     private async Task ToggleTransparent()
     {
         await TransparentChanged.InvokeAsync(!Transparent);
+        await OnChange.InvokeAsync();
+    }
+
+    private async Task OnDebounceInput(int value)
+    {
+        await RenderDebounceMsChanged.InvokeAsync(Math.Clamp(value, 0, 3000));
         await OnChange.InvokeAsync();
     }
 }

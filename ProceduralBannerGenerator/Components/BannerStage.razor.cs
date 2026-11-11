@@ -7,6 +7,17 @@ namespace ProceduralBannerGenerator.Components;
 public sealed partial class BannerStage
 {
     [Parameter]
+    public string? FontError { get; set; }
+
+    [Parameter]
+    public bool LoadingFont { get; set; }
+
+    [Parameter]
+    public EventCallback OnRetryFont { get; set; }
+
+    [Parameter]
+    public EventCallback OnDismissNotice { get; set; }
+    [Parameter]
     public string? ImageSrc { get; set; }
 
     [Parameter]

@@ -15,6 +15,11 @@ public sealed class BannerProfileService(IJSRuntime js)
     private List<ProfileEntry> _profiles = [];
     private long _lastManualPushTicks;
     private string _lastManualPushProfileId = "";
+    private bool _canPersist = true;
+
+    public bool PreserveTextOnSwitch { get; private set; }
+
+    public string? LoadNotice { get; private set; }
 
     public IReadOnlyList<ProfileEntry> Profiles => _profiles;
 
@@ -49,6 +54,7 @@ public sealed class BannerProfileService(IJSRuntime js)
             || a.Width != b.Width
             || a.Height != b.Height
             || a.Transparent != b.Transparent
+            || a.RenderDebounceMs != b.RenderDebounceMs
             || a.Style != b.Style;
     }
 
@@ -63,6 +69,11 @@ public sealed class BannerProfileService(IJSRuntime js)
         if (before.Seed != after.Seed)
         {
             parts.Add("seed");
+        }
+
+        if (before.RenderDebounceMs != after.RenderDebounceMs)
+        {
+            parts.Add("задержка отрисовки");
         }
 
         if (before.Width != after.Width || before.Height != after.Height || before.Transparent != after.Transparent)
@@ -149,31 +160,69 @@ public sealed class BannerProfileService(IJSRuntime js)
 
     public async Task<SavedState> LoadAsync(SavedState fallbackState)
     {
+        string? raw = null;
+        var sourceKey = ProfilesKey;
         try
         {
-            var json = await js.InvokeAsync<string?>("localStorage.getItem", ProfilesKey);
-            if (!string.IsNullOrEmpty(json)
-                && JsonSerializer.Deserialize<ProfileStore>(json) is { Profiles.Count: > 0 } store)
+            raw = await js.InvokeAsync<string?>("localStorage.getItem", ProfilesKey);
+            if (!string.IsNullOrEmpty(raw))
             {
-                foreach (var p in store.Profiles)
+                using var document = JsonDocument.Parse(raw);
+                var root = document.RootElement;
+                var damaged = false;
+                var recovered = new List<ProfileEntry>();
+                foreach (var item in root.GetProperty(nameof(ProfileStore.Profiles)).EnumerateArray())
                 {
-                    p.State.Style.Validate();
+                    try
+                    {
+                        var profile = item.Deserialize<ProfileEntry>()
+                            ?? throw new InvalidOperationException("Пустой профиль");
+                        ValidateState(profile.State);
+                        if (string.IsNullOrWhiteSpace(profile.Id) || recovered.Any(p => p.Id == profile.Id))
+                        {
+                            throw new InvalidOperationException("Повторный или пустой id профиля");
+                        }
+
+                        var history = profile.History ?? [];
+                        profile.History = history.Where(h => h is not null && IsValidState(h.State)).TakeLast(MaxHistorySteps).ToList();
+                        damaged |= profile.History.Count != history.Count;
+                        recovered.Add(profile);
+                    }
+                    catch (Exception)
+                    {
+                        damaged = true;
+                    }
                 }
 
-                _profiles = store.Profiles;
-                ActiveId = _profiles.Any(p => p.Id == store.ActiveId) ? store.ActiveId : _profiles[0].Id;
-                return _profiles.First(p => p.Id == ActiveId).State;
+                if (damaged || recovered.Count == 0)
+                {
+                    await BackupDamagedAsync(sourceKey, raw);
+                }
+
+                PreserveTextOnSwitch = root.TryGetProperty(nameof(ProfileStore.PreserveTextOnSwitch), out var keep) && keep.ValueKind == JsonValueKind.True;
+                _profiles = recovered;
+                var activeId = root.TryGetProperty(nameof(ProfileStore.ActiveId), out var active) ? active.GetString() : null;
+                ActiveId = _profiles.FirstOrDefault(p => p.Id == activeId)?.Id ?? _profiles.FirstOrDefault()?.Id ?? "";
+                return ActiveProfile?.State ?? SeedSingleProfile(fallbackState);
             }
 
             // Миграция одиночного снимка banner-state-v1 → профиль «Локальный» (ничего не теряем).
-            var legacy = await js.InvokeAsync<string?>("localStorage.getItem", StorageKey);
-            var migrated = string.IsNullOrEmpty(legacy) ? null : JsonSerializer.Deserialize<SavedState>(legacy);
-            migrated?.Style.Validate();
+            sourceKey = StorageKey;
+            raw = await js.InvokeAsync<string?>("localStorage.getItem", StorageKey);
+            var migrated = string.IsNullOrEmpty(raw) ? null : JsonSerializer.Deserialize<SavedState>(raw);
+            if (migrated is not null)
+            {
+                ValidateState(migrated);
+            }
             return SeedSingleProfile(migrated ?? fallbackState);
         }
         catch
         {
-            // битый снимок или недоступное хранилище – один профиль из текущих дефолтов
+            if (!string.IsNullOrEmpty(raw))
+            {
+                await BackupDamagedAsync(sourceKey, raw);
+            }
+
             if (_profiles.Count == 0)
             {
                 return SeedSingleProfile(fallbackState);
@@ -181,6 +230,50 @@ public sealed class BannerProfileService(IJSRuntime js)
 
             return ActiveProfile?.State ?? fallbackState;
         }
+    }
+
+    private async Task BackupDamagedAsync(string key, string raw)
+    {
+        try
+        {
+            var backupKey = $"{key}-damaged-{Guid.NewGuid():N}";
+            await js.InvokeVoidAsync("localStorage.setItem", backupKey, raw);
+            LoadNotice = $"Повреждённые записи пропущены. Исходный JSON сохранён в localStorage: {backupKey}";
+        }
+        catch
+        {
+            _canPersist = false;
+            LoadNotice = "Не удалось сохранить резервную копию повреждённых профилей. Исходное хранилище оставлено без изменений; новые правки действуют только до перезагрузки.";
+        }
+    }
+
+    private static void ValidateState(SavedState state)
+    {
+        if (state?.Style is null)
+        {
+            throw new InvalidOperationException("Пустое состояние профиля");
+        }
+
+        state.Style.Validate();
+    }
+
+    private static bool IsValidState(SavedState state)
+    {
+        try
+        {
+            ValidateState(state);
+            return true;
+        }
+        catch
+        {
+            return false;
+        }
+    }
+
+    public async Task SetPreserveTextAsync(bool value)
+    {
+        PreserveTextOnSwitch = value;
+        await PersistAsync();
     }
 
     public ProfileEntry EnsureActiveProfile(SavedState fallbackState)
@@ -205,6 +298,7 @@ public sealed class BannerProfileService(IJSRuntime js)
     // Фиксирует ручные правки редактора в истории активного профиля и сохраняет реестр в localStorage.
     public async Task CommitUiStateAsync(SavedState current, string? explicitLabel = null)
     {
+        ValidateState(current);
         var active = EnsureActiveProfile(current);
         if (HasTemplateChanged(active.State, current))
         {
@@ -252,6 +346,7 @@ public sealed class BannerProfileService(IJSRuntime js)
 
     public async Task<bool> FlushActiveProfileAsync(SavedState current)
     {
+        ValidateState(current);
         var active = ActiveProfile;
         if (active is null)
         {
@@ -306,7 +401,7 @@ public sealed class BannerProfileService(IJSRuntime js)
             return null;
         }
 
-        ActiveId = id;
+        SetActive(target);
         await PersistAsync();
         return target.State;
     }
@@ -342,7 +437,7 @@ public sealed class BannerProfileService(IJSRuntime js)
         return copy.State;
     }
 
-    public async Task<string?> PromptAndRenameActiveProfileAsync()
+    public async Task<string?> RenameActiveProfileAsync(string name)
     {
         var current = ActiveProfile;
         if (current is null)
@@ -350,7 +445,6 @@ public sealed class BannerProfileService(IJSRuntime js)
             return null;
         }
 
-        var name = await js.InvokeAsync<string?>("prompt", "Имя профиля:", current.Name);
         if (string.IsNullOrWhiteSpace(name))
         {
             return null;
@@ -401,6 +495,17 @@ public sealed class BannerProfileService(IJSRuntime js)
 
     public void SetActive(ProfileEntry entry)
     {
+        if (PreserveTextOnSwitch && ActiveProfile is { } current && current.Id != entry.Id)
+        {
+            var next = entry.State with { Title = current.State.Title, Subtitle = current.State.Subtitle, Tagline = current.State.Tagline };
+            if (HasTemplateChanged(entry.State, next))
+            {
+                PushHistory(entry, "Сохранение текста при смене профиля", entry.State);
+                entry.State = next;
+            }
+        }
+
+        ResetManualCoalesce();
         ActiveId = entry.Id;
     }
 
@@ -444,11 +549,26 @@ public sealed class BannerProfileService(IJSRuntime js)
 
     public async Task PersistAsync()
     {
+        foreach (var profile in _profiles)
+        {
+            ValidateState(profile.State);
+            foreach (var step in profile.History)
+            {
+                ValidateState(step.State);
+            }
+        }
+
+        if (!_canPersist)
+        {
+            return;
+        }
+
         try
         {
             var store = new ProfileStore
             {
                 ActiveId = ActiveId,
+                PreserveTextOnSwitch = PreserveTextOnSwitch,
                 Profiles = _profiles,
             };
 

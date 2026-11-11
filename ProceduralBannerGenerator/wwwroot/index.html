@@ -24,19 +24,7 @@
           property="og:image" />
     <meta content="summary"
           name="twitter:card" />
-    <link id="webassembly"
-          rel="preload" />
-    <link href="https://fonts.googleapis.com"
-          rel="preconnect" />
-    <link crossorigin
-          href="https://fonts.gstatic.com"
-          rel="preconnect" />
-    <link
-        href="https://fonts.googleapis.com/css2?family=Saira+Stencil+One&family=Saira+Condensed:wght@400;500;600;700&family=Chakra+Petch:wght@400;500;600&display=swap"
-        rel="stylesheet" />
     <link href="css/app.css"
-          rel="stylesheet" />
-    <link href="ProceduralBannerGenerator.styles.css"
           rel="stylesheet" />
     <link href="manifest.webmanifest"
           rel="manifest" />
@@ -71,7 +59,7 @@
         Произошла непредвиденная ошибка.
         <a class="reload"
            href=".">Перезагрузить</a>
-        <span aria-hidden="true"
+        <button type="button" aria-label="Закрыть сообщение об ошибке"
               class="dismiss"
               title="Закрыть">
             <svg fill="none"
@@ -85,7 +73,7 @@
                 <path d="M18 6 6 18" />
                 <path d="m6 6 12 12" />
             </svg>
-        </span>
+        </button>
     </div>
     <script>
         // Мост MCP: регистрирует инструменты в браузерном WebMCP (navigator.modelContext),

@@ -57,8 +57,8 @@
         <details class="sec">
             <summary>Раскладка</summary>
             <RangeRow Label="Кегль заголовка"
-                      Min="0"
-                      Max="0.2f"
+                      Min="0.02f"
+                      Max="0.15f"
                       Step="0.001f"
                       Value="@Style.Layout.TitleSizeFraction"
                       ValueChanged="v => L(s => s with { TitleSizeFraction = v })" />
@@ -99,8 +99,8 @@
                       Value="@Style.Layout.SubtitleBaselineOffsetFactor"
                       ValueChanged="v => L(s => s with { SubtitleBaselineOffsetFactor = v })" />
             <RangeRow Label="Наклон блока, °"
-                      Min="-15"
-                      Max="15"
+                      Min="-10"
+                      Max="10"
                       Step="0.1f"
                       Value="@Style.Layout.RotationDegrees"
                       ValueChanged="v => L(s => s with { RotationDegrees = v })" />
@@ -457,26 +457,6 @@
         <details class="sec">
             <summary>Фон-картинка</summary>
             <p class="hint">Загрузите свою картинку – она заменит подложку-градиент. Ручки ниже действуют только при загруженном фоне.</p>
-            <div class="row">
-                <label class="btn btn-ghost"
-                       title="Своя картинка-фон вместо подложки-градиента">
-                    <Icon Name="image" />
-                    @(HasBackground ? "Сменить фон" : "Фон картинкой")
-                    <InputFile OnChange="OnUploadBackground"
-                               accept="image/*"
-                               class="visually-hidden-file" />
-                </label>
-                @if (HasBackground)
-                {
-                    <button type="button"
-                            class="btn-danger"
-                            @onclick="OnClearBackground"
-                            title="Убрать картинку-фон">
-                        <Icon Name="x" />
-                        Убрать фон
-                    </button>
-                }
-            </div>
             <RangeRow Label="Затемнение фона"
                       Min="0"
                       Max="1"
@@ -494,30 +474,10 @@
         <details class="sec">
             <summary>Лого</summary>
             <p class="hint">Загрузите картинку лого/водяного знака – она рисуется в углу при включённом переключателе.</p>
-            <div class="row">
-                <label class="btn btn-ghost"
-                       title="Лого/водяной знак картинкой в углу кадра">
-                    <Icon Name="image" />
-                    @(HasLogo ? "Сменить лого" : "Лого картинкой")
-                    <InputFile OnChange="OnUploadLogo"
-                               accept="image/*"
-                               class="visually-hidden-file" />
-                </label>
-                @if (HasLogo)
-                {
-                    <button type="button"
-                            class="btn-danger"
-                            @onclick="OnClearLogo"
-                            title="Убрать лого">
-                        <Icon Name="x" />
-                        Убрать лого
-                    </button>
-                }
-            </div>
             <label class="prow"><span class="pname">Включено</span><input type="checkbox"
                                                                           checked="@Style.Logo.Enabled"
                                                                           @onchange="e => Lg(s => s with { Enabled = (bool)e.Value! })" /></label>
-            <label class="prow"><span class="pname">Угол</span>
+            <label class="prow corner-row"><span class="pname">Угол</span>
                 <select @onchange="e => Lg(s => s with { Corner = (string)e.Value! })">
                     <option value="tl"
                             selected="@(Style.Logo.Corner == "tl")">Слева сверху

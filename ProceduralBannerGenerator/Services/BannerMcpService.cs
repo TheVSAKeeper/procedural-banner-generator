@@ -97,7 +97,7 @@ public sealed class BannerMcpService(BannerProfileService profiles, IJSRuntime j
         string tool,
         string argsJson,
         int defaultDebounceMs,
-        Func<SavedState, string?> renderPreviewBase64)
+        Func<SavedState, string, string?> renderPreviewBase64)
     {
         try
         {
@@ -384,7 +384,7 @@ public sealed class BannerMcpService(BannerProfileService profiles, IJSRuntime j
         };
     }
 
-    private object McpGetTemplate(JsonObject args, Func<SavedState, string?> renderPreviewBase64)
+    private object McpGetTemplate(JsonObject args, Func<SavedState, string, string?> renderPreviewBase64)
     {
         var entry = FindProfile(args, true)!;
         var includePreview = GetBool(args, "includePreviewPng", false);
@@ -394,7 +394,7 @@ public sealed class BannerMcpService(BannerProfileService profiles, IJSRuntime j
     private async Task<(object Payload, SavedState? ActiveState, string Notice)> McpCreateTemplateAsync(
         JsonObject args,
         int defaultDebounceMs,
-        Func<SavedState, string?> renderPreviewBase64)
+        Func<SavedState, string, string?> renderPreviewBase64)
     {
         var requestedName = GetString(args, "name")?.Trim();
         var name = string.IsNullOrWhiteSpace(requestedName)
@@ -438,7 +438,7 @@ public sealed class BannerMcpService(BannerProfileService profiles, IJSRuntime j
 
     private async Task<(object Payload, SavedState? ActiveState, string Notice)> McpUpdateTemplateAsync(
         JsonObject args,
-        Func<SavedState, string?> renderPreviewBase64)
+        Func<SavedState, string, string?> renderPreviewBase64)
     {
         var entry = FindProfile(args, true)!;
         if (GetString(args, "newName") is { } newName && !string.IsNullOrWhiteSpace(newName))
@@ -485,7 +485,7 @@ public sealed class BannerMcpService(BannerProfileService profiles, IJSRuntime j
 
     private async Task<(object Payload, SavedState? ActiveState, string Notice)> McpUndoTemplateAsync(
         JsonObject args,
-        Func<SavedState, string?> renderPreviewBase64)
+        Func<SavedState, string, string?> renderPreviewBase64)
     {
         var entry = FindProfile(args, true)!;
         if (entry.History.Count == 0)
@@ -528,7 +528,7 @@ public sealed class BannerMcpService(BannerProfileService profiles, IJSRuntime j
 
     private async Task<(object Payload, SavedState? ActiveState, string Notice)> McpDuplicateTemplateAsync(
         JsonObject args,
-        Func<SavedState, string?> renderPreviewBase64)
+        Func<SavedState, string, string?> renderPreviewBase64)
     {
         var src = FindProfile(args, true)!;
         var requestedName = GetString(args, "newName")?.Trim();
@@ -552,7 +552,7 @@ public sealed class BannerMcpService(BannerProfileService profiles, IJSRuntime j
 
     private async Task<(object Payload, SavedState? ActiveState, string Notice)> McpRenameTemplateAsync(
         JsonObject args,
-        Func<SavedState, string?> renderPreviewBase64)
+        Func<SavedState, string, string?> renderPreviewBase64)
     {
         var entry = FindProfile(args, true)!;
         var newName = GetString(args, "newName")?.Trim();
@@ -597,7 +597,7 @@ public sealed class BannerMcpService(BannerProfileService profiles, IJSRuntime j
 
     private async Task<(object Payload, SavedState? ActiveState, string Notice)> McpSetActiveTemplateAsync(
         JsonObject args,
-        Func<SavedState, string?> renderPreviewBase64)
+        Func<SavedState, string, string?> renderPreviewBase64)
     {
         var entry = FindProfile(args, true)!;
         profiles.SetActive(entry);
@@ -610,7 +610,7 @@ public sealed class BannerMcpService(BannerProfileService profiles, IJSRuntime j
 
     private async Task<(object Payload, SavedState? ActiveState, string Notice)> McpResetTemplateStyleAsync(
         JsonObject args,
-        Func<SavedState, string?> renderPreviewBase64)
+        Func<SavedState, string, string?> renderPreviewBase64)
     {
         var entry = FindProfile(args, true)!;
         var beforeState = entry.State;
@@ -640,11 +640,11 @@ public sealed class BannerMcpService(BannerProfileService profiles, IJSRuntime j
         return (payload, activeState, $"MCP: сброшен стиль шаблона «{entry.Name}»");
     }
 
-    private object McpRenderBanner(JsonObject args, Func<SavedState, string?> renderPreviewBase64)
+    private object McpRenderBanner(JsonObject args, Func<SavedState, string, string?> renderPreviewBase64)
     {
         var entry = FindProfile(args, true)!;
         var tempState = ApplyPartialPatch(entry.State, args, out _);
-        var pngBase64 = renderPreviewBase64(tempState);
+        var pngBase64 = renderPreviewBase64(tempState, entry.Id);
         return new
         {
             templateId = entry.Id,
@@ -667,7 +667,7 @@ public sealed class BannerMcpService(BannerProfileService profiles, IJSRuntime j
         ProfileEntry entry,
         IReadOnlyList<string>? changedSections,
         bool includePreview,
-        Func<SavedState, string?> renderPreviewBase64,
+        Func<SavedState, string, string?> renderPreviewBase64,
         IReadOnlyList<string>? undoneSteps = null)
     {
         var s = entry.State;
@@ -700,7 +700,7 @@ public sealed class BannerMcpService(BannerProfileService profiles, IJSRuntime j
                 transparent = s.Transparent,
             },
             style = s.Style,
-            previewPngBase64 = includePreview ? renderPreviewBase64(s) : null,
+            previewPngBase64 = includePreview ? renderPreviewBase64(s, entry.Id) : null,
         };
     }
 }

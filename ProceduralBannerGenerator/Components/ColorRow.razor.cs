@@ -1,9 +1,39 @@
-﻿using Microsoft.AspNetCore.Components;
+﻿using BannerCore;
+using Microsoft.AspNetCore.Components;
 
 namespace ProceduralBannerGenerator.Components;
 
 public sealed partial class ColorRow
 {
+    private string _hex = "";
+    private string? _hexError;
+    private string? _lastValue;
+
+    protected override void OnParametersSet()
+    {
+        if (_lastValue != Value)
+        {
+            _lastValue = Value;
+            _hex = Value;
+            _hexError = null;
+        }
+    }
+
+    private async Task OnHex(ChangeEventArgs e)
+    {
+        _hex = e.Value?.ToString() ?? "";
+        try
+        {
+            StyleColor.Parse(_hex);
+            _hexError = null;
+            await ValueChanged.InvokeAsync(_hex.ToUpperInvariant());
+        }
+        catch (FormatException)
+        {
+            _hexError = "Введите #RRGGBB или #RRGGBBAA";
+        }
+    }
+
     [Parameter]
     [EditorRequired]
     public string Label { get; set; } = "";

@@ -24,14 +24,18 @@ public sealed partial class Home(
     private BannerStyle _style = new();
 
     // TODO: картинки фона/лого держим только в памяти – в localStorage не кладём (квота ~5 МБ, фон легко её пробьёт). После перезагрузки – загрузить заново.
-    private SKImage? _background;
-    private SKImage? _logo;
+    private readonly Dictionary<string, (SKImage? Background, SKImage? Logo)> _images = [];
+    private SKImage? Background => _images.GetValueOrDefault(ActiveId).Background;
+    private SKImage? Logo => _images.GetValueOrDefault(ActiveId).Logo;
 
     private SKTypeface? _typeface;
     private string? _imgSrc;
     private string? _exportHref;
     private string? _error;
     private string? _notice;
+    private string? _fontError;
+    private bool _loadingFont;
+    private bool _disposed;
 
     private bool _mcpConnected;
     private bool _promptCopied;
@@ -51,12 +55,17 @@ public sealed partial class Home(
 
     public async ValueTask DisposeAsync()
     {
+        _disposed = true;
         _renderDebounce?.Cancel();
         _renderDebounce?.Dispose();
         _promptResetCts?.Cancel();
         _promptResetCts?.Dispose();
-        _background?.Dispose();
-        _logo?.Dispose();
+        foreach (var image in _images.Values)
+        {
+            image.Background?.Dispose();
+            image.Logo?.Dispose();
+        }
+        _images.Clear();
         _typeface?.Dispose();
 
         try
@@ -88,6 +97,7 @@ public sealed partial class Home(
     {
         await FlushActiveProfileAsync();
         var result = await mcp.InvokeToolAsync(tool, argsJson, _renderDebounceMs, RenderStateToBase64);
+        PruneImages();
 
         if (result.ActiveStateToApply is { } nextState)
         {
@@ -111,14 +121,16 @@ public sealed partial class Home(
 
     protected override async Task OnInitializedAsync()
     {
-        var bytes = await http.GetByteArrayAsync("Bender-Black.otf");
-        using var fontData = SKData.CreateCopy(bytes);
-        _typeface = SKTypeface.FromData(fontData);
-
         var loaded = await profiles.LoadAsync(CaptureState());
         ApplyState(loaded);
+        _notice = profiles.LoadNotice;
         await mcp.EnsureTokenAsync();
-        Render();
+        await LoadFontAsync();
+
+        if (_disposed)
+        {
+            return;
+        }
 
         _dotNetRef = DotNetObjectReference.Create(this);
         try
@@ -130,6 +142,54 @@ public sealed partial class Home(
         {
             // Мост опционален – при ошибке JS-интеропа редактор продолжает работать автономно.
         }
+    }
+
+    private async Task LoadFontAsync()
+    {
+        if (_loadingFont || _disposed)
+        {
+            return;
+        }
+
+        _loadingFont = true;
+        _fontError = null;
+        try
+        {
+            var bytes = await http.GetByteArrayAsync("Bender-Black.otf");
+            if (_disposed)
+            {
+                return;
+            }
+
+            using var fontData = SKData.CreateCopy(bytes);
+            _typeface = SKTypeface.FromData(fontData)
+                ?? throw new InvalidOperationException("Не удалось прочитать шрифт");
+            Render();
+        }
+        catch (Exception ex)
+        {
+            _fontError = "Не удалось загрузить шрифт баннера: " + ex.Message;
+        }
+        finally
+        {
+            _loadingFont = false;
+        }
+    }
+
+    private void PruneImages()
+    {
+        foreach (var id in _images.Keys.Where(id => Profiles.All(p => p.Id != id)).ToArray())
+        {
+            var image = _images[id];
+            image.Background?.Dispose();
+            image.Logo?.Dispose();
+            _images.Remove(id);
+        }
+    }
+
+    private void DismissNotice()
+    {
+        _notice = null;
     }
 
     private static async Task<SKImage> DecodeImage(IBrowserFile file)
@@ -181,6 +241,7 @@ public sealed partial class Home(
 
     private async Task Randomize()
     {
+        _notice = null;
         _seed = Random.Shared.Next(1, 1_000_000);
         Render();
         await profiles.CommitUiStateAsync(CaptureState(), "Случайный seed");
@@ -188,6 +249,7 @@ public sealed partial class Home(
 
     private async Task ResetStyle()
     {
+        _notice = null;
         _style = new();
         Render();
         await profiles.CommitUiStateAsync(CaptureState(), "Сброс стиля");
@@ -222,6 +284,7 @@ public sealed partial class Home(
             return;
         }
 
+        _notice = null;
         ApplyState(selected);
         Render();
     }
@@ -230,6 +293,7 @@ public sealed partial class Home(
     {
         await FlushActiveProfileAsync();
         var created = await profiles.CreateNewProfileAsync();
+        _notice = null;
         ApplyState(created);
         Render();
     }
@@ -238,13 +302,15 @@ public sealed partial class Home(
     {
         await FlushActiveProfileAsync();
         await profiles.DuplicateActiveProfileAsync();
+        _notice = "Профиль скопирован. Фон и логотип загружаются отдельно для каждого профиля.";
         Render();
     }
 
-    private async Task RenameProfile()
+    private async Task RenameProfile(string name)
     {
         await FlushActiveProfileAsync();
-        _error = await profiles.PromptAndRenameActiveProfileAsync();
+        _notice = null;
+        _error = await profiles.RenameActiveProfileAsync(name);
     }
 
     private async Task DeleteProfile()
@@ -255,6 +321,8 @@ public sealed partial class Home(
             return;
         }
 
+        PruneImages();
+        _notice = null;
         ApplyState(nextState);
         Render();
     }
@@ -271,6 +339,7 @@ public sealed partial class Home(
 
     private async Task RequestRender()
     {
+        _notice = null;
         _renderDebounce?.Cancel();
         _renderDebounce?.Dispose();
         var cts = new CancellationTokenSource();
@@ -285,19 +354,36 @@ public sealed partial class Home(
             return;
         }
 
-        Render();
-        await profiles.CommitUiStateAsync(CaptureState());
+        try
+        {
+            _style.Validate();
+            Render();
+            await profiles.CommitUiStateAsync(CaptureState());
+        }
+        catch (Exception ex)
+        {
+            _error = ex.Message;
+        }
     }
 
     private async Task UploadBackground(InputFileChangeEventArgs e)
     {
+        var profileId = ActiveId;
         try
         {
-            _background?.Dispose();
-            _background = await DecodeImage(e.File);
+            var image = await DecodeImage(e.File);
+            if (_disposed || Profiles.All(p => p.Id != profileId))
+            {
+                image.Dispose();
+                return;
+            }
+
+            var previous = _images.GetValueOrDefault(profileId);
+            previous.Background?.Dispose();
+            _images[profileId] = (image, previous.Logo);
             _error = null;
+            _notice = null;
             Render();
-            await profiles.CommitUiStateAsync(CaptureState());
         }
         catch (Exception ex)
         {
@@ -307,10 +393,33 @@ public sealed partial class Home(
 
     private async Task UploadLogo(InputFileChangeEventArgs e)
     {
+        var profileId = ActiveId;
         try
         {
-            _logo?.Dispose();
-            _logo = await DecodeImage(e.File);
+            var image = await DecodeImage(e.File);
+            if (_disposed || Profiles.All(p => p.Id != profileId))
+            {
+                image.Dispose();
+                return;
+            }
+
+            var previous = _images.GetValueOrDefault(profileId);
+            previous.Logo?.Dispose();
+            _images[profileId] = (previous.Background, image);
+            if (profileId != ActiveId)
+            {
+                var profile = Profiles.First(p => p.Id == profileId);
+                var next = profile.State with { Style = profile.State.Style with { Logo = profile.State.Style.Logo with { Enabled = true } } };
+                if (BannerProfileService.HasTemplateChanged(profile.State, next))
+                {
+                    BannerProfileService.PushHistory(profile, "Загрузка логотипа", profile.State);
+                    profile.State = next;
+                    await profiles.PersistAsync();
+                }
+
+                return;
+            }
+
             if (!_style.Logo.Enabled)
             {
                 _style = _style with
@@ -323,6 +432,7 @@ public sealed partial class Home(
             }
 
             _error = null;
+            _notice = null;
             Render();
             await profiles.CommitUiStateAsync(CaptureState(), "Загрузка логотипа");
         }
@@ -334,16 +444,20 @@ public sealed partial class Home(
 
     private void ClearBackground()
     {
-        _background?.Dispose();
-        _background = null;
+        Background?.Dispose();
+        _images[ActiveId] = (null, Logo);
+        _notice = null;
         Render();
     }
 
-    private void ClearLogo()
+    private async Task ClearLogo()
     {
-        _logo?.Dispose();
-        _logo = null;
+        Logo?.Dispose();
+        _images[ActiveId] = (Background, null);
+        _style = _style with { Logo = _style.Logo with { Enabled = false } };
+        _notice = null;
         Render();
+        await profiles.CommitUiStateAsync(CaptureState(), "Удаление логотипа");
     }
 
     private void Render()
@@ -368,7 +482,7 @@ public sealed partial class Home(
                 Transparent = _transparent,
             };
 
-            var png = new BannerRenderer(_style).RenderPng(spec, _typeface, _background, _logo);
+            var png = new BannerRenderer(_style).RenderPng(spec, _typeface, Background, Logo);
             _imgSrc = "data:image/png;base64," + Convert.ToBase64String(png);
             _error = null;
         }
@@ -378,7 +492,7 @@ public sealed partial class Home(
         }
     }
 
-    private string? RenderStateToBase64(SavedState s)
+    private string? RenderStateToBase64(SavedState s, string profileId)
     {
         if (_typeface is null)
         {
@@ -396,7 +510,8 @@ public sealed partial class Home(
             Transparent = s.Transparent,
         };
 
-        var png = new BannerRenderer(s.Style).RenderPng(spec, _typeface, _background, _logo);
+        var images = _images.GetValueOrDefault(profileId);
+        var png = new BannerRenderer(s.Style).RenderPng(spec, _typeface, images.Background, images.Logo);
         return Convert.ToBase64String(png);
     }
 
@@ -408,6 +523,7 @@ public sealed partial class Home(
             using var reader = new StreamReader(stream);
             _style = BannerStyle.FromJson(await reader.ReadToEndAsync());
             _error = null;
+            _notice = null;
             Render();
             await profiles.CommitUiStateAsync(CaptureState(), "Импорт стиля");
         }
