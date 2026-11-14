@@ -144,14 +144,18 @@ public sealed partial class ProfilePanel
         return Task.CompletedTask;
     }
 
-    private Task HandleProfileSelected(ChangeEventArgs e)
+    private Task SelectProfile(string? id)
     {
-        var id = e.Value?.ToString();
         if (string.IsNullOrEmpty(id) || id == ActiveId)
         {
             return Task.CompletedTask;
         }
 
         return OnSelectProfile.InvokeAsync(id);
+    }
+
+    private Task HandleProfileSelected(ChangeEventArgs e)
+    {
+        return SelectProfile(e.Value?.ToString());
     }
 }

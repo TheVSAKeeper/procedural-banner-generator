@@ -1,50 +1,78 @@
 ﻿<div class="modebar">
-    <div class="mode-tabs" role="tablist" aria-label="Режим отображения">
-        @foreach (var item in Modes)
-        {
-            var active = ActiveMode == item.Mode;
-            <button @key="item.Mode"
-                    type="button"
-                    role="tab"
-                    aria-selected="@(active ? "true" : "false")"
-                    class="mode-tab @(active ? "active" : null)"
-                    @onclick="() => OnSelectMode.InvokeAsync(item.Mode)">
-                <Icon Name="@item.Icon" />
-                @item.Label
-            </button>
-        }
-    </div>
-
-    <div class="modebar-meta">
-        <select class="profile-select"
-                aria-label="Активный профиль"
-                @onchange="HandleProfileSelected"
-                title="Профиль стиля – отдельный сохранённый шаблон оформления баннера.">
-            @foreach (var p in Profiles)
+    <div class="modebar-row">
+        <div class="mode-tabs" role="tablist" aria-label="Режим отображения">
+            @foreach (var item in Modes)
             {
-                <option @key="p.Id"
-                        value="@p.Id"
-                        selected="@(p.Id == ActiveId)">@p.Name</option>
+                var active = ActiveMode == item.Mode;
+                <button @key="item.Mode"
+                        type="button"
+                        role="tab"
+                        aria-selected="@(active ? "true" : "false")"
+                        class="mode-tab @(active ? "active" : null)"
+                        @onclick="() => OnSelectMode.InvokeAsync(item.Mode)">
+                    <Icon Name="@item.Icon" />
+                    @item.Label
+                </button>
             }
-        </select>
+        </div>
 
-        <button type="button"
-                class="btn-ghost modebar-btn @(_manageOpen ? "active" : null)"
-                aria-expanded="@(_manageOpen ? "true" : "false")"
-                @onclick="ToggleManage"
-                title="Управление профилями (создать, переименовать, дублировать, удалить)">
-            <Icon Name="settings" />
-            Профиль
-        </button>
+        <div class="modebar-meta">
+            <select class="profile-select @(ActiveMode == WorkspaceMode.Focus ? null : "profile-select-compact")"
+                    aria-label="Активный профиль"
+                    @onchange="HandleProfileSelected"
+                    title="Профиль стиля – отдельный сохранённый шаблон оформления баннера.">
+                @foreach (var p in Profiles)
+                {
+                    <option @key="p.Id"
+                            value="@p.Id"
+                            selected="@(p.Id == ActiveId)">@p.Name</option>
+                }
+            </select>
 
-        <button type="button"
-                class="mcp-pill @(McpConnected ? "live" : null)"
-                @onclick="() => OnSelectMode.InvokeAsync(WorkspaceMode.Agent)"
-                title="Статус локального MCP-моста (ws://127.0.0.1:5219/ws). Нажмите для перехода в режим «Агент и MCP».">
-            <span class="mcp-dot"></span>
-            @(McpConnected ? "MCP: онлайн" : "MCP: ожидание")
-        </button>
+            <button type="button"
+                    class="btn-ghost modebar-btn @(_manageOpen ? "active" : null)"
+                    aria-expanded="@(_manageOpen ? "true" : "false")"
+                    @onclick="ToggleManage"
+                    title="Управление профилями (создать, переименовать, дублировать, удалить)">
+                <Icon Name="settings" />
+                Профиль
+            </button>
+
+            <button type="button"
+                    class="mcp-pill @(McpConnected ? "live" : null)"
+                    @onclick="() => OnSelectMode.InvokeAsync(WorkspaceMode.Agent)"
+                    title="Статус локального MCP-моста (ws://127.0.0.1:5219/ws). Нажмите для перехода в режим «Агент и MCP».">
+                <span class="mcp-dot"></span>
+                @(McpConnected ? "MCP: онлайн" : "MCP: ожидание")
+            </button>
+        </div>
     </div>
+
+    @if (ActiveMode != WorkspaceMode.Focus)
+    {
+        <div class="profile-strip" role="group" aria-label="Профили стиля">
+            <span class="profile-strip-label">Профили</span>
+            <div class="profile-strip-list">
+                @foreach (var p in Profiles)
+                {
+                    var active = p.Id == ActiveId;
+                    <button @key="p.Id"
+                            type="button"
+                            aria-pressed="@(active ? "true" : "false")"
+                            class="profile-chip @(active ? "active" : null)"
+                            title="@p.Name"
+                            @onclick="() => SelectProfile(p.Id)">@p.Name</button>
+                }
+                <button type="button"
+                        class="profile-chip profile-chip-add"
+                        @onclick="OnNewProfile"
+                        aria-label="Новый профиль"
+                        title="Создать новый профиль с демонстрационным текстом">
+                    <Icon Name="plus" />
+                </button>
+            </div>
+        </div>
+    }
 </div>
 
 @if (_manageOpen)

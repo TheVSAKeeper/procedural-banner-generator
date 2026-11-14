@@ -1068,13 +1068,88 @@ h1[tabindex="-1"]:focus {
 
 .modebar {
     display: flex;
-    flex-wrap: wrap;
-    align-items: center;
-    justify-content: space-between;
+    flex-direction: column;
     margin-bottom: 1.1rem;
     padding: 0.65rem 0.85rem;
     animation: rise 0.5s 0.09s both;
+    gap: 0.65rem;
+}
+
+.modebar-row {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
     gap: 0.7rem;
+}
+
+.profile-strip {
+    display: flex;
+    align-items: center;
+    padding-top: 0.6rem;
+    border-top: 1px dashed var(--line-bright);
+    gap: 0.65rem;
+}
+
+.profile-strip-label {
+    font-family: var(--font-tech);
+    font-size: 0.7rem;
+    flex-shrink: 0;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: var(--bone-dim);
+}
+
+.profile-strip-list {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    min-width: 0;
+    gap: 0.35rem;
+}
+
+.profile-chip {
+    font-family: var(--font-body);
+    font-size: 0.82rem;
+    font-weight: 500;
+    line-height: 1.2;
+    display: inline-block;
+    max-width: 190px;
+    padding: 0.38rem 0.68rem;
+    overflow: hidden;
+    white-space: nowrap;
+    text-overflow: ellipsis;
+    letter-spacing: 0.03em;
+    text-transform: none;
+    color: var(--bone-dim);
+    border-color: var(--line-bright);
+    background: var(--bg-2);
+}
+
+.profile-chip:hover {
+    color: var(--acid);
+    border-color: var(--acid);
+    box-shadow: inset 0 0 0 1px var(--acid-dim);
+}
+
+.profile-chip.active {
+    font-weight: 600;
+    color: var(--acid);
+    border-color: var(--acid);
+    background: rgba(200, 226, 58, 0.12);
+    box-shadow: inset 0 0 0 1px var(--acid-dim);
+}
+
+.profile-chip-add {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0.38rem 0.5rem;
+    color: var(--bone-dim);
+}
+
+.profile-select-compact {
+    display: none;
 }
 
 .mode-tabs {
@@ -1259,6 +1334,14 @@ h1[tabindex="-1"]:focus {
 }
 
 @media (max-width: 720px) {
+    .profile-strip {
+        display: none;
+    }
+
+    .profile-select-compact {
+        display: inline-block;
+    }
+
     .stage-focus .stage-actions {
         grid-template-columns: repeat(2, minmax(0, 1fr));
     }
