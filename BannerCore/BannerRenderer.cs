@@ -8,6 +8,7 @@ namespace BannerCore;
 /// Слои строятся снизу вверх:
 /// <list type="number">
 ///     <item>фон – загруженная картинка, прозрачность или тёмная заглушка-градиент;</item>
+///     <item>опциональная плашка-фон третьей строки (нижний слой поверх фона);</item>
 ///     <item>чёрная плашка-мазок за заголовком и зелёная подмазка за ведущим номером;</item>
 ///     <item>зелёная полоса-мазок с «зубьями» под подзаголовок;</item>
 ///     <item>3D-заголовок – зелёный номер и белый текст, оба с мотлингом и потёртостями;</item>
@@ -105,8 +106,24 @@ public sealed partial class BannerRenderer(BannerStyle style)
             centerX + (subWidth / 2) + (subFont.Size * Math.Clamp(layout.BandRightPaddingFactor, 0f, 5f)),
             bandCenterY + (bandHeight / 2));
 
+        using var tagFont = taglineText is not null && style.Tagline.Enabled
+            ? new SKFont(typeface, titleSize * Math.Clamp(style.Tagline.SizeFactor, 0.1f, 1f))
+            {
+                ScaleX = style.Tagline.ScaleX,
+                Subpixel = true,
+            }
+            : null;
+        var tagBaseline = tagFont is not null ? subBaseline + (titleSize * style.Tagline.BaselineGapFactor) : 0f;
+        var tagBounds = default(SKRect);
+        var tagWidth = tagFont is not null ? tagFont.MeasureText(taglineText!, out tagBounds) : 0f;
+
         canvas.Save();
         canvas.RotateDegrees(Math.Clamp(layout.RotationDegrees, -10f, 10f), centerX, plate.MidY);
+
+        if (tagFont is not null && style.Tagline.BackgroundEnabled)
+        {
+            DrawTaglineBackground(canvas, centerX, tagBaseline, tagWidth, tagBounds, tagFont.Size, style.Tagline, spec.Seed);
+        }
 
         DrawBlackPlate(canvas, plate, spec.Seed, rng);
         DrawPrefixSmear(
@@ -135,9 +152,9 @@ public sealed partial class BannerRenderer(BannerStyle style)
 
         DrawSubtitle(canvas, subtitleText, subFont, centerX, subBaseline, subWidth, subBounds, rng);
 
-        if (taglineText is not null && style.Tagline.Enabled)
+        if (tagFont is not null)
         {
-            DrawTagline(canvas, taglineText, typeface, centerX, subBaseline, titleSize, spec.Seed, rng);
+            DrawTagline(canvas, taglineText!, tagFont, centerX, tagBaseline, tagWidth, tagBounds, rng);
         }
 
         canvas.Restore();
@@ -721,32 +738,19 @@ public sealed partial class BannerRenderer(BannerStyle style)
 
     /// <summary>
     /// Третья строка (ник/дата/тег) под подзаголовком – слегка потёртый текст внутри наклонённого
-    /// блока с опциональной плашкой-фоном. Кегль, цвет, фон, конденс и потёртость – в <see cref="BannerStyle.TaglineStyle" />.
+    /// блока. Кегль, цвет, фон-плашка, конденс и потёртость – в <see cref="BannerStyle.TaglineStyle" />.
     /// </summary>
     private void DrawTagline(
         SKCanvas canvas,
         string tagline,
-        SKTypeface typeface,
+        SKFont font,
         float centerX,
-        float subBaseline,
-        float titleSize,
-        int seed,
+        float baseline,
+        float width,
+        SKRect bounds,
         Random rng)
     {
         var t = style.Tagline;
-        using var font = new SKFont(typeface, titleSize * Math.Clamp(t.SizeFactor, 0.1f, 1f))
-        {
-            ScaleX = t.ScaleX,
-            Subpixel = true,
-        };
-
-        var baseline = subBaseline + (titleSize * t.BaselineGapFactor);
-        var width = font.MeasureText(tagline, out var bounds);
-
-        if (t.BackgroundEnabled)
-        {
-            DrawTaglineBackground(canvas, centerX, baseline, width, bounds, font.Size, t, seed, rng);
-        }
 
         canvas.SaveLayer(null);
         using (var fill = new SKPaint
@@ -771,8 +775,7 @@ public sealed partial class BannerRenderer(BannerStyle style)
         SKRect textBounds,
         float fontSize,
         BannerStyle.TaglineStyle t,
-        int seed,
-        Random rng)
+        int seed)
     {
         var bgColor = StyleColor.Parse(t.BackgroundColor);
         if (bgColor.Alpha == 0)
@@ -780,6 +783,7 @@ public sealed partial class BannerRenderer(BannerStyle style)
             return;
         }
 
+        var bgRng = new Random(seed + 89);
         var centerY = baseline + ((textBounds.Top + textBounds.Bottom) / 2f);
         var halfH = (MathF.Max(textBounds.Height, fontSize * 0.7f) / 2f) + (fontSize * Math.Clamp(t.BackgroundPaddingYFactor, 0f, 2f));
         var padX = fontSize * Math.Clamp(t.BackgroundPaddingXFactor, 0f, 3f);
@@ -826,10 +830,10 @@ public sealed partial class BannerRenderer(BannerStyle style)
         }
 
         var teethLength = bgRect.Height * MathF.Min(0.45f, edgeAmpFactor * 4.5f);
-        Grunge.BrushTeeth(canvas, bgRect.Left, bgRect.Top, bgRect.Bottom, -1, bgColor, rng, teethLength);
-        Grunge.BrushTeeth(canvas, bgRect.Right, bgRect.Top, bgRect.Bottom, +1, bgColor, rng, teethLength);
-        Grunge.Mottle(canvas, bgRect, rng, StyleColor.Parse(style.Plate.MottleColor), 6, bgRect.Height * 0.45f);
-        Grunge.Distress(canvas, bgRect, rng, 0.30f);
+        Grunge.BrushTeeth(canvas, bgRect.Left, bgRect.Top, bgRect.Bottom, -1, bgColor, bgRng, teethLength);
+        Grunge.BrushTeeth(canvas, bgRect.Right, bgRect.Top, bgRect.Bottom, +1, bgColor, bgRng, teethLength);
+        Grunge.Mottle(canvas, bgRect, bgRng, StyleColor.Parse(style.Plate.MottleColor), 6, bgRect.Height * 0.45f);
+        Grunge.Distress(canvas, bgRect, bgRng, 0.30f);
 
         canvas.Restore();
     }

@@ -308,7 +308,7 @@ public sealed record BannerStyle
         public float BaselineGapFactor { get; init; } = 0.34f; // отступ базовой линии ниже подзаголовка (доли кегля заголовка)
         public float ScaleX { get; init; } = 0.92f; // конденс шрифта
         public float DistressDensity { get; init; } = 0.4f; // потёртость текста
-        public bool BackgroundEnabled { get; init; } // плашка-фон под третьей строкой (для контраста на светлых фонах)
+        public bool BackgroundEnabled { get; init; } = true; // плашка-фон под третьей строкой (для контраста на светлых фонах)
         public string BackgroundColor { get; init; } = "#0E0E0EF5";
         public float BackgroundPaddingXFactor { get; init; } = 0.45f; // горизонтальные поля фона (доли кегля третьей строки)
         public float BackgroundPaddingYFactor { get; init; } = 0.22f; // вертикальные поля фона (доли кегля третьей строки)
