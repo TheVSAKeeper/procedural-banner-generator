@@ -458,6 +458,30 @@
                           Step="0.05f"
                           Value="@Style.Tagline.DistressDensity"
                           ValueChanged="v => Tg(s => s with { DistressDensity = v })" />
+                <label class="prow"><span class="pname">Фон-плашка</span><input type="checkbox"
+                                                                                checked="@Style.Tagline.BackgroundEnabled"
+                                                                                @onchange="e => Tg(s => s with { BackgroundEnabled = (bool)e.Value! })" /></label>
+                <ColorRow Label="Цвет плашки"
+                          Value="@Style.Tagline.BackgroundColor"
+                          ValueChanged="v => Tg(s => s with { BackgroundColor = v })" />
+                <RangeRow Label="Поля плашки (X)"
+                          Min="0"
+                          Max="2"
+                          Step="0.01f"
+                          Value="@Style.Tagline.BackgroundPaddingXFactor"
+                          ValueChanged="v => Tg(s => s with { BackgroundPaddingXFactor = v })" />
+                <RangeRow Label="Поля плашки (Y)"
+                          Min="0"
+                          Max="1.5f"
+                          Step="0.01f"
+                          Value="@Style.Tagline.BackgroundPaddingYFactor"
+                          ValueChanged="v => Tg(s => s with { BackgroundPaddingYFactor = v })" />
+                <RangeRow Label="Рваность плашки"
+                          Min="0"
+                          Max="0.3f"
+                          Step="0.005f"
+                          Value="@Style.Tagline.BackgroundEdgeAmpFactor"
+                          ValueChanged="v => Tg(s => s with { BackgroundEdgeAmpFactor = v })" />
                 break;
 
             case StyleTab.Background:

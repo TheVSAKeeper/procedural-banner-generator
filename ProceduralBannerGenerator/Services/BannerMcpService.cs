@@ -160,7 +160,7 @@ public sealed class BannerMcpService(BannerProfileService profiles, IJSRuntime j
                 smear = "Зелёная подмазка под номером выпуска: enabled, вынос за плашку, рваность, зубья, зерно, выгрызы.",
                 band = "Полоса под подзаголовком: рваность краёв/торцов, зубья слева/справа, зерно, выгрызы, потёртость текста подзаголовка.",
                 accents = "Чипсы вдоль верхней кромки (chipsLeftCount, chipsRightCount, chipsSpread), зелёная крошка (splatterGreenCount), тёмные брызги (splatterDarkCount).",
-                tagline = "Третья строка под подзаголовком: enabled, sizeFactor, color, baselineGapFactor, scaleX, distressDensity.",
+                tagline = "Третья строка под подзаголовком: enabled, sizeFactor, color, baselineGapFactor, scaleX, distressDensity, плашка-фон (backgroundEnabled, backgroundColor, backgroundPaddingXFactor, backgroundPaddingYFactor, backgroundEdgeAmpFactor).",
                 logo = "Логотип в углу: enabled, corner (tl|tr|bl|br), sizeFraction, opacity, marginFraction.",
                 background = "Обработка загруженной картинки-фона: darkenAlpha (0..1), blurSigma (0..30).",
             },

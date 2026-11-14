@@ -343,6 +343,53 @@
                 }
             };
         })();
+
+        window.bannerUi = (function () {
+            const supportsFieldSizing = typeof CSS !== "undefined" && CSS.supports("field-sizing", "content");
+
+            function resizeTextarea(el) {
+                if (supportsFieldSizing || !el || el.offsetParent === null) {
+                    return;
+                }
+                el.style.height = "auto";
+                if (el.scrollHeight > 0) {
+                    el.style.height = el.scrollHeight + "px";
+                }
+            }
+
+            document.addEventListener("keydown", function (e) {
+                if (e.key === "Enter" && !e.isComposing && e.target && e.target.matches && e.target.matches("textarea.spec-textarea")) {
+                    e.preventDefault();
+                    e.target.blur();
+                }
+            });
+
+            if (!supportsFieldSizing) {
+                document.addEventListener("input", function (e) {
+                    if (e.target && e.target.matches && e.target.matches("textarea.spec-textarea")) {
+                        resizeTextarea(e.target);
+                    }
+                });
+                document.addEventListener("toggle", function (e) {
+                    if (e.target && e.target.open && e.target.querySelectorAll) {
+                        for (const el of e.target.querySelectorAll("textarea.spec-textarea")) {
+                            resizeTextarea(el);
+                        }
+                    }
+                }, true);
+            }
+
+            return {
+                syncTextareas() {
+                    if (supportsFieldSizing) {
+                        return;
+                    }
+                    for (const el of document.querySelectorAll("textarea.spec-textarea")) {
+                        resizeTextarea(el);
+                    }
+                }
+            };
+        })();
     </script>
     <script src="_framework/blazor.webassembly#[.{fingerprint}].js"></script>
     <script>navigator.serviceWorker.register('service-worker.js', { updateViaCache: 'none' });</script>

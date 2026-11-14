@@ -1,10 +1,16 @@
 ﻿using Microsoft.AspNetCore.Components;
+using Microsoft.JSInterop;
 using ProceduralBannerGenerator.Models;
 
 namespace ProceduralBannerGenerator.Components;
 
-public sealed partial class SpecPanel
+public sealed partial class SpecPanel(IJSRuntime js)
 {
+    private string? _lastTitle;
+    private string? _lastSubtitle;
+    private string? _lastTagline;
+    private WorkspaceMode _lastMode;
+
     [Parameter]
     public WorkspaceMode Mode { get; set; } = WorkspaceMode.Release;
 
@@ -61,21 +67,38 @@ public sealed partial class SpecPanel
     [Parameter]
     public EventCallback OnChange { get; set; }
 
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender || _lastTitle != Title || _lastSubtitle != Subtitle || _lastTagline != Tagline || _lastMode != Mode)
+        {
+            _lastTitle = Title;
+            _lastSubtitle = Subtitle;
+            _lastTagline = Tagline;
+            _lastMode = Mode;
+            await js.InvokeVoidAsync("bannerUi.syncTextareas");
+        }
+    }
+
+    private static string NormalizeLine(string value)
+    {
+        return value.Replace("\r\n", " ").Replace('\r', ' ').Replace('\n', ' ');
+    }
+
     private async Task OnTitleInput(string value)
     {
-        await TitleChanged.InvokeAsync(value);
+        await TitleChanged.InvokeAsync(NormalizeLine(value));
         await OnChange.InvokeAsync();
     }
 
     private async Task OnSubtitleInput(string value)
     {
-        await SubtitleChanged.InvokeAsync(value);
+        await SubtitleChanged.InvokeAsync(NormalizeLine(value));
         await OnChange.InvokeAsync();
     }
 
     private async Task OnTaglineInput(string value)
     {
-        await TaglineChanged.InvokeAsync(value);
+        await TaglineChanged.InvokeAsync(NormalizeLine(value));
         await OnChange.InvokeAsync();
     }
 

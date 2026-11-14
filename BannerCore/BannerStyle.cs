@@ -85,6 +85,7 @@ public sealed record BannerStyle
         StyleColor.Parse(Smear.MottleColor);
         StyleColor.Parse(Band.MottleColor);
         StyleColor.Parse(Tagline.Color);
+        StyleColor.Parse(Tagline.BackgroundColor);
 
         CheckRange(Layout.TitleSizeFraction, 0f, 0.5f, "layout.titleSizeFraction");
         CheckRange(Layout.MaxTitleWidthFraction, 0.05f, 1f, "layout.maxTitleWidthFraction");
@@ -150,6 +151,9 @@ public sealed record BannerStyle
         CheckRange(Tagline.BaselineGapFactor, -1f, 3f, "tagline.baselineGapFactor");
         CheckRange(Tagline.ScaleX, 0.1f, 3f, "tagline.scaleX");
         CheckRange(Tagline.DistressDensity, 0f, 10f, "tagline.distressDensity");
+        CheckRange(Tagline.BackgroundPaddingXFactor, 0f, 3f, "tagline.backgroundPaddingXFactor");
+        CheckRange(Tagline.BackgroundPaddingYFactor, 0f, 2f, "tagline.backgroundPaddingYFactor");
+        CheckRange(Tagline.BackgroundEdgeAmpFactor, 0f, 0.5f, "tagline.backgroundEdgeAmpFactor");
 
         var corner = (Logo.Corner ?? "br").Trim().ToLowerInvariant();
         if (corner is not ("tl" or "tr" or "bl" or "br"))
@@ -304,6 +308,11 @@ public sealed record BannerStyle
         public float BaselineGapFactor { get; init; } = 0.34f; // отступ базовой линии ниже подзаголовка (доли кегля заголовка)
         public float ScaleX { get; init; } = 0.92f; // конденс шрифта
         public float DistressDensity { get; init; } = 0.4f; // потёртость текста
+        public bool BackgroundEnabled { get; init; } // плашка-фон под третьей строкой (для контраста на светлых фонах)
+        public string BackgroundColor { get; init; } = "#0E0E0EF5";
+        public float BackgroundPaddingXFactor { get; init; } = 0.45f; // горизонтальные поля фона (доли кегля третьей строки)
+        public float BackgroundPaddingYFactor { get; init; } = 0.22f; // вертикальные поля фона (доли кегля третьей строки)
+        public float BackgroundEdgeAmpFactor { get; init; } = 0.06f; // рваность краёв фона (0 – ровная плашка)
     }
 
     /// <summary>

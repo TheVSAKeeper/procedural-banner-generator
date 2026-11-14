@@ -137,7 +137,7 @@ public sealed partial class BannerRenderer(BannerStyle style)
 
         if (taglineText is not null && style.Tagline.Enabled)
         {
-            DrawTagline(canvas, taglineText, typeface, centerX, subBaseline, titleSize, rng);
+            DrawTagline(canvas, taglineText, typeface, centerX, subBaseline, titleSize, spec.Seed, rng);
         }
 
         canvas.Restore();
@@ -721,7 +721,7 @@ public sealed partial class BannerRenderer(BannerStyle style)
 
     /// <summary>
     /// Третья строка (ник/дата/тег) под подзаголовком – слегка потёртый текст внутри наклонённого
-    /// блока. Кегль, цвет, конденс и потёртость – в <see cref="BannerStyle.TaglineStyle" />.
+    /// блока с опциональной плашкой-фоном. Кегль, цвет, фон, конденс и потёртость – в <see cref="BannerStyle.TaglineStyle" />.
     /// </summary>
     private void DrawTagline(
         SKCanvas canvas,
@@ -730,6 +730,7 @@ public sealed partial class BannerRenderer(BannerStyle style)
         float centerX,
         float subBaseline,
         float titleSize,
+        int seed,
         Random rng)
     {
         var t = style.Tagline;
@@ -741,6 +742,11 @@ public sealed partial class BannerRenderer(BannerStyle style)
 
         var baseline = subBaseline + (titleSize * t.BaselineGapFactor);
         var width = font.MeasureText(tagline, out var bounds);
+
+        if (t.BackgroundEnabled)
+        {
+            DrawTaglineBackground(canvas, centerX, baseline, width, bounds, font.Size, t, seed, rng);
+        }
 
         canvas.SaveLayer(null);
         using (var fill = new SKPaint
@@ -754,6 +760,77 @@ public sealed partial class BannerRenderer(BannerStyle style)
 
         var rect = new SKRect(centerX - (width / 2), baseline + bounds.Top, centerX + (width / 2), baseline + bounds.Bottom);
         Grunge.Distress(canvas, rect, rng, t.DistressDensity);
+        canvas.Restore();
+    }
+
+    private void DrawTaglineBackground(
+        SKCanvas canvas,
+        float centerX,
+        float baseline,
+        float textWidth,
+        SKRect textBounds,
+        float fontSize,
+        BannerStyle.TaglineStyle t,
+        int seed,
+        Random rng)
+    {
+        var bgColor = StyleColor.Parse(t.BackgroundColor);
+        if (bgColor.Alpha == 0)
+        {
+            return;
+        }
+
+        var centerY = baseline + ((textBounds.Top + textBounds.Bottom) / 2f);
+        var halfH = (MathF.Max(textBounds.Height, fontSize * 0.7f) / 2f) + (fontSize * Math.Clamp(t.BackgroundPaddingYFactor, 0f, 2f));
+        var padX = fontSize * Math.Clamp(t.BackgroundPaddingXFactor, 0f, 3f);
+        var bgRect = new SKRect(
+            centerX - (textWidth / 2f) - padX,
+            centerY - halfH,
+            centerX + (textWidth / 2f) + padX,
+            centerY + halfH);
+
+        var shadowAlpha = (byte)Math.Clamp(130 * bgColor.Alpha / 255, 0, 255);
+        using var shadowPaint = new SKPaint
+        {
+            ImageFilter = SKImageFilter.CreateDropShadow(
+                0,
+                3f,
+                5f,
+                5f,
+                new(0, 0, 0, shadowAlpha)),
+        };
+
+        canvas.SaveLayer(shadowPaint);
+
+        using var paint = new SKPaint
+        {
+            Color = bgColor,
+            IsAntialias = true,
+        };
+
+        var edgeAmpFactor = Math.Clamp(t.BackgroundEdgeAmpFactor, 0f, 0.5f);
+        if (edgeAmpFactor <= 0.001f)
+        {
+            canvas.DrawRect(bgRect, paint);
+            canvas.Restore();
+            return;
+        }
+
+        using (var path = Grunge.BrushStrokePath(
+            bgRect,
+            seed + 89,
+            bgRect.Height * edgeAmpFactor,
+            bgRect.Height * MathF.Min(0.5f, edgeAmpFactor * 2.2f)))
+        {
+            canvas.DrawPath(path, paint);
+        }
+
+        var teethLength = bgRect.Height * MathF.Min(0.45f, edgeAmpFactor * 4.5f);
+        Grunge.BrushTeeth(canvas, bgRect.Left, bgRect.Top, bgRect.Bottom, -1, bgColor, rng, teethLength);
+        Grunge.BrushTeeth(canvas, bgRect.Right, bgRect.Top, bgRect.Bottom, +1, bgColor, rng, teethLength);
+        Grunge.Mottle(canvas, bgRect, rng, StyleColor.Parse(style.Plate.MottleColor), 6, bgRect.Height * 0.45f);
+        Grunge.Distress(canvas, bgRect, rng, 0.30f);
+
         canvas.Restore();
     }
 

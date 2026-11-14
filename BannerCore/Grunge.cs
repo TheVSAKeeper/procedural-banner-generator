@@ -86,7 +86,8 @@ public static class Grunge
             var length = cappedLength * (0.15f + (0.85f * r * r));
             var x2 = edgeX + (direction * length);
 
-            paint.Color = color.WithAlpha((byte)(170 + rng.Next(86)));
+            var toothAlpha = (byte)Math.Clamp((170 + rng.Next(86)) * color.Alpha / 255, 0, 255);
+            paint.Color = color.WithAlpha(toothAlpha);
             canvas.DrawRect(
                 new(
                     MathF.Min(edgeX - (direction * 4), x2),

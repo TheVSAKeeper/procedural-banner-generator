@@ -37,35 +37,50 @@
                 }
             </div>
             <details class="mcp-details">
-                <summary>Текст выпуска и Seed</summary>
+                <summary>Текст выпуска</summary>
                 <div class="grid spec-nested">
-                    @TextAndSeedFields
+                    @TextFields
                 </div>
             </details>
+            @SeedSpoiler
         }
         else
         {
-            @TextAndSeedFields
+            @TextFields
+            @SeedSpoiler
         }
     </div>
 </section>
 
 @code {
-    private RenderFragment TextAndSeedFields => __builder =>
+    private RenderFragment TextFields => __builder =>
     {
-        <label>Заголовок<input @bind:get="Title"
-                               @bind:set="OnTitleInput"
-                               placeholder="290. ЛЕДОКОЛ XIX" /></label>
-        <label>Подзаголовок<input @bind:get="Subtitle"
-                                  @bind:set="OnSubtitleInput"
-                                  placeholder="КОРОЛЬ МАШИННОГО ЗАЛА" /></label>
-        <div class="row">
-            <label class="grow">Третья строка<input @bind:get="Tagline"
-                                                    @bind:set="OnTaglineInput"
-                                                    placeholder="ник / дата / тег (необязательно)" /></label>
-            <label class="sm">Seed<input type="number"
-                                         @bind:get="Seed"
-                                         @bind:set="OnSeedInput" /></label>
-        </div>
+        <label>Заголовок<textarea class="spec-textarea"
+                                  rows="1"
+                                  @bind:get="Title"
+                                  @bind:set="OnTitleInput"
+                                  placeholder="290. ЛЕДОКОЛ XIX"></textarea></label>
+        <label>Подзаголовок<textarea class="spec-textarea"
+                                     rows="1"
+                                     @bind:get="Subtitle"
+                                     @bind:set="OnSubtitleInput"
+                                     placeholder="КОРОЛЬ МАШИННОГО ЗАЛА"></textarea></label>
+        <label>Третья строка<textarea class="spec-textarea"
+                                      rows="1"
+                                      @bind:get="Tagline"
+                                      @bind:set="OnTaglineInput"
+                                      placeholder="ник / дата / тег (необязательно)"></textarea></label>
+    };
+
+    private RenderFragment SeedSpoiler => __builder =>
+    {
+        <details class="mcp-details">
+            <summary>Seed (@Seed)</summary>
+            <div class="grid spec-nested">
+                <label>Seed<input type="number"
+                                  @bind:get="Seed"
+                                  @bind:set="OnSeedInput" /></label>
+            </div>
+        </details>
     };
 }
