@@ -122,7 +122,8 @@ Antigravity – агент сам подключится к открытой в�
 
 ## Собрать из исходников
 
-Нужен .NET 10 SDK (`10.0.100` или новее) с workload `wasm-tools` (`dotnet workload install wasm-tools`).
+Нужен .NET 10 SDK (`10.0.100` или новее) с workload для WebAssembly (`dotnet workload restore ProceduralBannerGenerator/ProceduralBannerGenerator.csproj`
+подтянет `wasm-tools` на .NET 10 или `wasm-tools-net10` на .NET 11).
 Нативная WASM-сборка включена в проекте для SkiaSharp; после смены его версии выполните `dotnet build -t:Rebuild`,
 чтобы исключить старые WebCIL-артефакты в локальном выводе. Ядро рендера выделено в библиотеку `BannerCore`, веб-интерфейс – проект Blazor
 WebAssembly в папке `ProceduralBannerGenerator`.
