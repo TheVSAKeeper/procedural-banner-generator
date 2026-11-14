@@ -1,52 +1,71 @@
 ﻿<section class="panel">
-    <span class="module-head">Параметры выпуска</span>
+    <span class="module-head">@(Mode == WorkspaceMode.Calibration ? "Кадр и отрисовка" : "Параметры выпуска")</span>
     <div class="grid">
+        @if (Mode == WorkspaceMode.Calibration)
+        {
+            <div class="row">
+                <label class="sm">Ширина<input type="number"
+                                               min="320"
+                                               max="3840"
+                                               @bind:get="Width"
+                                               @bind:set="OnWidthInput" /></label>
+                <label class="sm">Высота<input type="number"
+                                               min="180"
+                                               max="2160"
+                                               @bind:get="Height"
+                                               @bind:set="OnHeightInput" /></label>
+                <label class="sm">Задержка отрисовки, мс<input type="number"
+                                                               @bind:get="RenderDebounceMs"
+                                                               @bind:set="OnDebounceInput"
+                                                               min="0"
+                                                               max="3000"
+                                                               step="10" /></label>
+            </div>
+            <div>
+                <button type="button"
+                        class="toggle @(Transparent ? "on" : null)"
+                        @onclick="ToggleTransparent"
+                        disabled="@HasBackground"
+                        aria-pressed="@(Transparent ? "true" : "false")"
+                        title="Прозрачный фон вместо подложки-градиента">
+                    <Icon Name="@(Transparent ? "square-check" : "square")" />
+                    Прозрачный фон
+                </button>
+                @if (HasBackground)
+                {
+                    <p class="hint">Прозрачность недоступна: фон-картинка заменяет подложку. Уберите фон, чтобы включить прозрачность.</p>
+                }
+            </div>
+            <details class="mcp-details">
+                <summary>Текст выпуска и Seed</summary>
+                <div class="grid spec-nested">
+                    @TextAndSeedFields
+                </div>
+            </details>
+        }
+        else
+        {
+            @TextAndSeedFields
+        }
+    </div>
+</section>
+
+@code {
+    private RenderFragment TextAndSeedFields => __builder =>
+    {
         <label>Заголовок<input @bind:get="Title"
                                @bind:set="OnTitleInput"
                                placeholder="290. ЛЕДОКОЛ XIX" /></label>
         <label>Подзаголовок<input @bind:get="Subtitle"
                                   @bind:set="OnSubtitleInput"
                                   placeholder="КОРОЛЬ МАШИННОГО ЗАЛА" /></label>
-        <label>Третья строка<input @bind:get="Tagline"
-                                   @bind:set="OnTaglineInput"
-                                   placeholder="ник / дата / тег (необязательно)" /></label>
         <div class="row">
+            <label class="grow">Третья строка<input @bind:get="Tagline"
+                                                    @bind:set="OnTaglineInput"
+                                                    placeholder="ник / дата / тег (необязательно)" /></label>
             <label class="sm">Seed<input type="number"
                                          @bind:get="Seed"
                                          @bind:set="OnSeedInput" /></label>
-            <label class="sm">Ширина<input type="number"
-                                           min="320"
-                                           max="3840"
-                                           @bind:get="Width"
-                                           @bind:set="OnWidthInput" /></label>
-            <label class="sm">Высота<input type="number"
-                                           min="180"
-                                           max="2160"
-                                           @bind:get="Height"
-                                           @bind:set="OnHeightInput" /></label>
         </div>
-        <div class="row">
-            <label class="sm">Задержка отрисовки, мс<input type="number"
-                                                           @bind:get="RenderDebounceMs"
-                                                           @bind:set="OnDebounceInput"
-                                                           min="0"
-                                                           max="3000"
-                                                           step="10" /></label>
-        </div>
-        <div>
-            <button type="button"
-                    class="toggle @(Transparent ? "on" : null)"
-                    @onclick="ToggleTransparent"
-                    disabled="@HasBackground"
-                    aria-pressed="@(Transparent ? "true" : "false")"
-                    title="Прозрачный фон вместо подложки-градиента">
-                <Icon Name="@(Transparent ? "square-check" : "square")" />
-                Прозрачный фон
-            </button>
-            @if (HasBackground)
-            {
-                <p class="hint">Прозрачность недоступна: фон-картинка заменяет подложку. Уберите фон, чтобы включить прозрачность.</p>
-            }
-        </div>
-    </div>
-</section>
+    };
+}

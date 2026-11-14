@@ -1,4 +1,4 @@
-﻿<div class="stage">
+﻿<div class="stage @(FocusLayout ? "stage-focus" : null)">
     <section class="monitor">
         <span class="module-head">Выходной кадр</span>
         <div class="monitor-screen">
@@ -74,31 +74,34 @@
                 <Icon Name="undo" />
                 Откатить <span class="undo-count">(@History.Count)</span>
             </button>
-            @if (ExportHref is not null)
+            @if (ShowStyleActions)
             {
-                <a class="btn btn-ghost"
-                   download="banner-style.json"
-                   href="@ExportHref"
-                   title="Сохранить текущие настройки стиля в файл JSON">
-                    <Icon Name="save" />
-                    Сохранить стиль</a>
+                @if (ExportHref is not null)
+                {
+                    <a class="btn btn-ghost"
+                       download="banner-style.json"
+                       href="@ExportHref"
+                       title="Сохранить текущие настройки стиля в файл JSON">
+                        <Icon Name="save" />
+                        Сохранить стиль</a>
+                }
+                <label class="btn btn-ghost"
+                       title="Загрузить настройки стиля из ранее сохранённого файла JSON">
+                    <Icon Name="upload" />
+                    Загрузить стиль
+                    <InputFile OnChange="OnImportStyle"
+                               accept=".json,application/json"
+                               class="visually-hidden-file" />
+                </label>
+                <button type="button"
+                        class="btn-danger reset-style"
+                        @onclick="OnResetStyle"
+                        disabled="@(!IsReady)"
+                        title="Вернуть все настройки стиля к значениям по умолчанию">
+                    <Icon Name="rotate-ccw" />
+                    Сбросить стиль
+                </button>
             }
-            <label class="btn btn-ghost"
-                   title="Загрузить настройки стиля из ранее сохранённого файла JSON">
-                <Icon Name="upload" />
-                Загрузить стиль
-                <InputFile OnChange="OnImportStyle"
-                           accept=".json,application/json"
-                           class="visually-hidden-file" />
-            </label>
-            <button type="button"
-                    class="btn-danger reset-style"
-                    @onclick="OnResetStyle"
-                    disabled="@(!IsReady)"
-                    title="Вернуть все настройки стиля к значениям по умолчанию">
-                <Icon Name="rotate-ccw" />
-                Сбросить стиль
-            </button>
         </div>
     </section>
 </div>

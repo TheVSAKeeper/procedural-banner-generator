@@ -36,3 +36,12 @@ public sealed class ProfileStore
     public string ActiveId { get; set; } = "";
     public List<ProfileEntry> Profiles { get; set; } = [];
 }
+
+public enum WorkspaceMode
+{
+    None = 0,
+    Release = 1,
+    Calibration = 2,
+    Agent = 3,
+    Focus = 4,
+}

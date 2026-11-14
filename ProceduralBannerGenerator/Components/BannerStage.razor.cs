@@ -49,4 +49,10 @@ public sealed partial class BannerStage
 
     [Parameter]
     public EventCallback<InputFileChangeEventArgs> OnImportStyle { get; set; }
+
+    [Parameter]
+    public bool ShowStyleActions { get; set; }
+
+    [Parameter]
+    public bool FocusLayout { get; set; }
 }

@@ -1,0 +1,46 @@
+﻿<section class="panel">
+    <span class="module-head">История шагов (@History.Count)</span>
+    @if (History.Count == 0)
+    {
+        <p class="hint">История изменений этого профиля пока пуста.</p>
+    }
+    else if (Collapsible)
+    {
+        <details class="mcp-details">
+            <summary>Показать шаги (@History.Count)</summary>
+            @HistoryList
+        </details>
+    }
+    else
+    {
+        @HistoryList
+    }
+</section>
+
+@code {
+    private RenderFragment HistoryList => __builder =>
+    {
+        <div class="history-list">
+            @for (var i = History.Count - 1; i >= 0; i--)
+            {
+                var stepsBack = History.Count - i;
+                var step = History[i];
+                <div @key="step"
+                     class="history-row">
+                    <div class="history-meta"
+                         title="@step.Label">
+                        <span class="history-label">@step.Label</span>
+                        <span class="history-time">шаг –@stepsBack · @step.Timestamp</span>
+                    </div>
+                    <button type="button"
+                            class="btn-ghost history-btn"
+                            @onclick="() => OnUndoSteps.InvokeAsync(stepsBack)"
+                            title="Откатить до состояния перед этим шагом">
+                        <Icon Name="undo" />
+                        Вернуть
+                    </button>
+                </div>
+            }
+        </div>
+    };
+}

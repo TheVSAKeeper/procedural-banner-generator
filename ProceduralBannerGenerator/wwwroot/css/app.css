@@ -207,7 +207,8 @@ body::before {
 .panel,
 .monitor,
 .adv,
-.toolbar {
+.toolbar,
+.modebar {
     position: relative;
     border: 1px solid var(--line);
     background: var(--panel);
@@ -220,7 +221,9 @@ body::before {
 .adv::before,
 .adv::after,
 .toolbar::before,
-.toolbar::after {
+.toolbar::after,
+.modebar::before,
+.modebar::after {
     position: absolute;
     width: 13px;
     height: 13px;
@@ -232,7 +235,8 @@ body::before {
 .panel::before,
 .monitor::before,
 .adv::before,
-.toolbar::before {
+.toolbar::before,
+.modebar::before {
     top: -1px;
     left: -1px;
     border-right: 0;
@@ -242,7 +246,8 @@ body::before {
 .panel::after,
 .monitor::after,
 .adv::after,
-.toolbar::after {
+.toolbar::after,
+.modebar::after {
     right: -1px;
     bottom: -1px;
     border-top: 0;
@@ -1043,6 +1048,204 @@ h1[tabindex="-1"]:focus {
     color: #0c0f07;
     border-color: #0c0f07;
     background: transparent;
+}
+
+.modebar {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 1.1rem;
+    padding: 0.65rem 0.85rem;
+    animation: rise 0.5s 0.09s both;
+    gap: 0.7rem;
+}
+
+.mode-tabs {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.4rem;
+}
+
+.mode-tab {
+    font-size: 0.82rem;
+    padding: 0.45rem 0.8rem;
+    letter-spacing: 0.09em;
+    color: var(--bone-dim);
+    border-color: var(--line-bright);
+    background: var(--bg-2);
+}
+
+.mode-tab:hover {
+    color: var(--acid);
+    border-color: var(--acid);
+    box-shadow: inset 0 0 0 1px var(--acid-dim);
+}
+
+.mode-tab.active {
+    color: var(--bg);
+    border-color: var(--acid);
+    background: var(--acid);
+}
+
+.modebar-meta {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+.profile-select {
+    font-family: var(--font-body);
+    font-size: 0.9rem;
+    min-width: 150px;
+    max-width: 240px;
+    min-height: 34px;
+    padding: 0.35rem 0.55rem;
+    color: var(--bone);
+    border: 1px solid var(--line-bright);
+    border-radius: 0;
+    background: var(--bg-2);
+}
+
+.profile-select:focus {
+    border-color: var(--acid);
+    outline: none;
+}
+
+.modebar-btn {
+    padding: 0.42rem 0.7rem;
+    font-size: 0.8rem;
+}
+
+.modebar-btn.active {
+    color: var(--acid);
+    border-color: var(--acid);
+    box-shadow: inset 0 0 0 1px var(--acid-dim);
+}
+
+.mcp-pill {
+    font-family: var(--font-tech);
+    font-size: 0.74rem;
+    display: inline-flex;
+    align-items: center;
+    padding: 0.42rem 0.65rem;
+    letter-spacing: 0.06em;
+    color: var(--bone-dim);
+    border: 1px solid var(--line-bright);
+    background: var(--bg-2);
+    gap: 0.45rem;
+}
+
+.mcp-pill:hover {
+    color: var(--acid);
+    border-color: var(--acid);
+    box-shadow: none;
+}
+
+.mcp-pill.live {
+    color: var(--acid);
+    border-color: var(--acid-dim);
+}
+
+.mcp-pill.live .mcp-dot {
+    border-color: var(--acid);
+    background: var(--acid);
+    box-shadow: 0 0 8px rgba(200, 226, 58, 0.7);
+}
+
+.profile-drawer {
+    margin-bottom: 1.1rem;
+}
+
+.drawer-head {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 0.75rem;
+}
+
+.drawer-head .module-head {
+    flex: 1 1 auto;
+}
+
+.drawer-close {
+    padding: 0.25rem;
+    min-height: 28px;
+}
+
+.workspace-focus {
+    grid-template-columns: 1fr;
+}
+
+.stage-focus {
+    position: static;
+    top: 0;
+}
+
+.stage-focus .stage-actions {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
+.stage-focus .stage-actions .btn-primary {
+    grid-column: auto;
+}
+
+.cal-tabs {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(96px, 1fr));
+    margin-bottom: 0.9rem;
+    padding-bottom: 0.85rem;
+    border-bottom: 1px dashed var(--line-bright);
+    gap: 0.35rem;
+}
+
+.cal-tab {
+    font-size: 0.74rem;
+    justify-content: center;
+    padding: 0.42rem 0.45rem;
+    letter-spacing: 0.05em;
+    color: var(--bone-dim);
+    border-color: var(--line-bright);
+    background: var(--bg-2);
+}
+
+.cal-tab:hover {
+    color: var(--acid);
+    border-color: var(--acid);
+    box-shadow: inset 0 0 0 1px var(--acid-dim);
+}
+
+.cal-tab.active {
+    color: var(--bg);
+    border-color: var(--acid);
+    background: var(--acid);
+}
+
+.cal-body {
+    display: flex;
+    flex-direction: column;
+    gap: 0.15rem;
+}
+
+.spec-nested {
+    margin-top: 0.65rem;
+}
+
+.row .grow {
+    flex: 1 1 12rem;
+    min-width: 0;
+}
+
+.mcp-bar-top {
+    padding-top: 0;
+    border-top: 0;
+}
+
+@media (max-width: 720px) {
+    .stage-focus .stage-actions {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
 }
 
 @media (max-width: 360px) {

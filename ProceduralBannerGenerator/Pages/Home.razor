@@ -8,7 +8,20 @@
         <div class="hazard"></div>
     </div>
 
-    <div class="workspace">
+    <ProfilePanel ActiveMode="@_mode"
+                  OnSelectMode="SetModeAsync"
+                  Profiles="@Profiles"
+                  ActiveId="@ActiveId"
+                  PreserveTextOnSwitch="@profiles.PreserveTextOnSwitch"
+                  PreserveTextOnSwitchChanged="profiles.SetPreserveTextAsync"
+                  McpConnected="@_mcpConnected"
+                  OnSelectProfile="SelectProfileAsync"
+                  OnNewProfile="NewProfile"
+                  OnRenameProfile="RenameProfile"
+                  OnDuplicateProfile="DuplicateProfile"
+                  OnDeleteProfile="DeleteProfile" />
+
+    <div class="workspace @(_mode == WorkspaceMode.Focus ? "workspace-focus" : null)">
         <BannerStage ImageSrc="@_imgSrc"
                      ExportHref="@_exportHref"
                      IsReady="@(_typeface is not null)"
@@ -19,67 +32,124 @@
                      OnRetryFont="LoadFontAsync"
                      OnDismissNotice="DismissNotice"
                      History="@ActiveHistory"
+                     ShowStyleActions="@(_mode == WorkspaceMode.Calibration)"
+                     FocusLayout="@(_mode == WorkspaceMode.Focus)"
                      OnRender="Render"
                      OnRandomize="Randomize"
                      OnUndoLastStep="UndoLastStepAsync"
                      OnResetStyle="ResetStyle"
                      OnImportStyle="ImportStyle" />
 
-        <div class="controls">
-            <ProfilePanel Profiles="@Profiles"
-                          ActiveId="@ActiveId"
-                          History="@ActiveHistory"
-                          PreserveTextOnSwitch="@profiles.PreserveTextOnSwitch"
-                          PreserveTextOnSwitchChanged="profiles.SetPreserveTextAsync"
-                          McpConnected="@_mcpConnected"
-                          PromptCopied="@_promptCopied"
-                          AgentPrompt="@AgentPrompt"
-                          OnSelectProfile="SelectProfileAsync"
-                          OnNewProfile="NewProfile"
-                          OnRenameProfile="RenameProfile"
-                          OnDuplicateProfile="DuplicateProfile"
-                          OnDeleteProfile="DeleteProfile"
-                          OnCopyAgentPrompt="CopyAgentPrompt"
-                          OnUndoSteps="UndoStepsAsync" />
+        @if (_mode != WorkspaceMode.Focus)
+        {
+            <div class="controls">
+                @if (_mode == WorkspaceMode.Release)
+                {
+                    <SpecPanel Mode="WorkspaceMode.Release"
+                               @bind-Title="_title"
+                               @bind-Subtitle="_subtitle"
+                               @bind-Tagline="_tagline"
+                               @bind-Seed="_seed"
+                               @bind-Width="_width"
+                               @bind-Height="_height"
+                               @bind-RenderDebounceMs="_renderDebounceMs"
+                               @bind-Transparent="_transparent"
+                               HasBackground="@(Background is not null)"
+                               OnChange="RequestRender" />
 
-            <SpecPanel @bind-Title="_title"
-                       @bind-Subtitle="_subtitle"
-                       @bind-Tagline="_tagline"
-                       @bind-Seed="_seed"
-                       @bind-Width="_width"
-                       @bind-Height="_height"
-                       @bind-RenderDebounceMs="_renderDebounceMs"
-                       @bind-Transparent="_transparent"
-                       HasBackground="@(Background is not null)"
-                       OnChange="RequestRender" />
+                    <section class="panel">
+                        <span class="module-head">Фон выпуска</span>
+                        <p class="hint">Картинка относится только к текущему профилю и хранится до перезагрузки страницы.</p>
+                        <div class="image-actions">
+                            @BackgroundControls
+                        </div>
+                    </section>
+                }
+                else if (_mode == WorkspaceMode.Calibration)
+                {
+                    <SpecPanel Mode="WorkspaceMode.Calibration"
+                               @bind-Title="_title"
+                               @bind-Subtitle="_subtitle"
+                               @bind-Tagline="_tagline"
+                               @bind-Seed="_seed"
+                               @bind-Width="_width"
+                               @bind-Height="_height"
+                               @bind-RenderDebounceMs="_renderDebounceMs"
+                               @bind-Transparent="_transparent"
+                               HasBackground="@(Background is not null)"
+                               OnChange="RequestRender" />
 
-            <section class="panel">
-                <span class="module-head">Фон и логотип</span>
-                <p class="hint">Картинки относятся только к текущему профилю и хранятся до перезагрузки страницы.</p>
-                <div class="image-actions">
-                    <label class="btn btn-ghost">
-                        <Icon Name="image" />
-                        @(Background is null ? "Загрузить фон" : "Сменить фон")
-                        <InputFile OnChange="UploadBackground" accept="image/*" class="visually-hidden-file" />
-                    </label>
-                    @if (Background is not null)
-                    {
-                        <button type="button" class="btn-danger" @onclick="ClearBackground">Убрать фон</button>
-                    }
-                    <label class="btn btn-ghost">
-                        <Icon Name="image" />
-                        @(Logo is null ? "Загрузить логотип" : "Сменить логотип")
-                        <InputFile OnChange="UploadLogo" accept="image/*" class="visually-hidden-file" />
-                    </label>
-                    @if (Logo is not null)
-                    {
-                        <button type="button" class="btn-danger" @onclick="ClearLogo">Убрать логотип</button>
-                    }
-                </div>
-            </section>
+                    <section class="panel">
+                        <span class="module-head">Фон и логотип</span>
+                        <p class="hint">Картинки относятся только к текущему профилю и хранятся до перезагрузки страницы.</p>
+                        <div class="image-actions">
+                            @BackgroundControls
+                            <label class="btn btn-ghost">
+                                <Icon Name="image" />
+                                @(Logo is null ? "Загрузить логотип" : "Сменить логотип")
+                                <InputFile OnChange="UploadLogo" accept="image/*" class="visually-hidden-file" />
+                            </label>
+                            @if (Logo is not null)
+                            {
+                                <button type="button" class="btn-danger" @onclick="ClearLogo">Убрать логотип</button>
+                            }
+                        </div>
+                    </section>
 
-            <StyleCalibrationPanel @bind-Style="_style"
-                                   @bind-Style:after="RequestRender" />
-        </div>
+                    <StyleCalibrationPanel @bind-Style="_style"
+                                           @bind-Style:after="RequestRender" />
+
+                    <HistoryPanel History="@ActiveHistory"
+                                  Collapsible="true"
+                                  OnUndoSteps="UndoStepsAsync" />
+                }
+                else if (_mode == WorkspaceMode.Agent)
+                {
+                    <section class="panel">
+                        <span class="module-head">Подключение агента (MCP)</span>
+                        <div class="grid">
+                            <div class="mcp-bar mcp-bar-top">
+                                <span class="mcp-status @( _mcpConnected ? "live" : null)"
+                                      title="Статус локального MCP-моста (ws://127.0.0.1:5219/ws)">
+                                    <span class="mcp-dot"></span>
+                                    @(_mcpConnected ? "MCP: мост подключён" : "MCP: ожидание моста")
+                                </span>
+                                <button type="button"
+                                        class="btn"
+                                        @onclick="CopyAgentPrompt"
+                                        title="Скопировать промпт в буфер обмена и вставить в любого агента (Claude Code, Codex, Cursor, Antigravity) для подключения по MCP">
+                                    <Icon Name="@(_promptCopied ? "check" : "terminal")" />
+                                    @(_promptCopied ? "Промпт скопирован" : "Промпт для агента (MCP)")
+                                </button>
+                            </div>
+                            <textarea class="mcp-prompt-view"
+                                      aria-label="Промпт установки MCP для агента"
+                                      rows="8"
+                                      readonly
+                                      value="@AgentPrompt"></textarea>
+                        </div>
+                    </section>
+
+                    <HistoryPanel History="@ActiveHistory"
+                                  Collapsible="false"
+                                  OnUndoSteps="UndoStepsAsync" />
+                }
+            </div>
+        }
     </div>
 </div>
+
+@code {
+    private RenderFragment BackgroundControls => __builder =>
+    {
+        <label class="btn btn-ghost">
+            <Icon Name="image" />
+            @(Background is null ? "Загрузить фон" : "Сменить фон")
+            <InputFile OnChange="UploadBackground" accept="image/*" class="visually-hidden-file" />
+        </label>
+        @if (Background is not null)
+        {
+            <button type="button" class="btn-danger" @onclick="ClearBackground">Убрать фон</button>
+        }
+    };
+}

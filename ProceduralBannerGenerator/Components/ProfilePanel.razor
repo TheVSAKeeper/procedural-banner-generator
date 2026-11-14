@@ -1,117 +1,122 @@
-﻿<section class="panel">
-    <span class="module-head">Профиль стиля</span>
-    <div class="grid" @onkeydown="HandleKeyDown">
-        <label>Активный профиль
-            <select @onchange="HandleProfileSelected"
-                    title="Профиль стиля – отдельный сохранённый шаблон оформления баннера.">
-                @foreach (var p in Profiles)
-                {
-                    <option @key="p.Id"
-                            value="@p.Id"
-                            selected="@(p.Id == ActiveId)">@p.Name</option>
-                }
-            </select>
-        </label>
-        <label class="check-label">
-            <input type="checkbox" checked="@PreserveTextOnSwitch" @onchange="e => PreserveTextOnSwitchChanged.InvokeAsync((bool)e.Value!)" />
-            Сохранять текст выпуска при смене профиля
-        </label>
-        @if (_renaming)
+﻿<div class="modebar">
+    <div class="mode-tabs" role="tablist" aria-label="Режим отображения">
+        @foreach (var item in Modes)
         {
-            <div class="inline-edit">
-                <label>Новое имя профиля<input @ref="_nameInput" @bind="_name" @bind:event="oninput" /></label>
-                <button type="button" class="btn-ghost" @onclick="SaveName">Сохранить имя</button>
-                <button type="button" class="btn-ghost" @onclick="CancelEdit">Отмена</button>
-            </div>
-        }
-        <div class="actions">
-            <button type="button"
-                    class="btn-ghost"
-                    @onclick="OnNewProfile"
-                    title="Новый профиль с демонстрационным текстом">
-                <Icon Name="plus" />
-                Новый
+            var active = ActiveMode == item.Mode;
+            <button @key="item.Mode"
+                    type="button"
+                    role="tab"
+                    aria-selected="@(active ? "true" : "false")"
+                    class="mode-tab @(active ? "active" : null)"
+                    @onclick="() => OnSelectMode.InvokeAsync(item.Mode)">
+                <Icon Name="@item.Icon" />
+                @item.Label
             </button>
-            <button type="button"
-                    class="btn-ghost"
-                    @onclick="BeginRename"
-                    title="Переименовать профиль">
-                <Icon Name="pencil" />
-                Переименовать
-            </button>
-            <button type="button"
-                    class="btn-ghost"
-                    @onclick="OnDuplicateProfile"
-                    title="Скопировать профиль">
-                <Icon Name="copy" />
-                Дублировать
-            </button>
-            <button type="button"
-                    class="btn-danger"
-                    @onclick="BeginDelete"
-                    disabled="@(Profiles.Count <= 1)"
-                    title="Удалить профиль (последний удалить нельзя)">
-                <Icon Name="trash-2" />
-                Удалить
-            </button>
-        </div>
-        @if (_deleting)
-        {
-            <div class="inline-edit" role="group" aria-label="Подтверждение удаления профиля">
-                <p>Удалить профиль «@Profiles.FirstOrDefault(p => p.Id == ActiveId)?.Name» и его историю?</p>
-                <button type="button" class="btn-danger" @onclick="ConfirmDelete">Да, удалить профиль</button>
-                <button type="button" class="btn-ghost" @onclick="CancelEdit">Отмена</button>
-            </div>
-        }
-        <div class="mcp-bar">
-            <span class="mcp-status @(McpConnected ? "live" : null)"
-                  title="Статус локального MCP-моста (ws://127.0.0.1:5219/ws)">
-                <span class="mcp-dot"></span>
-                @(McpConnected ? "MCP: мост подключён" : "MCP: ожидание моста")
-            </span>
-            <button type="button"
-                    class="btn"
-                    @onclick="OnCopyAgentPrompt"
-                    title="Скопировать промпт в буфер обмена и вставить в любого агента (Claude Code, Codex, Cursor, Antigravity) для подключения по MCP">
-                <Icon Name="@(PromptCopied ? "check" : "terminal")" />
-                @(PromptCopied ? "Промпт скопирован" : "Промпт для агента (MCP)")
-            </button>
-        </div>
-        <details class="mcp-details">
-            <summary>Показать промпт установки MCP</summary>
-            <textarea class="mcp-prompt-view"
-                      aria-label="Промпт установки MCP для агента"
-                      rows="6"
-                      readonly
-                      value="@AgentPrompt"></textarea>
-        </details>
-        @if (History.Count > 0)
-        {
-            <details class="mcp-details">
-                <summary>История шагов (@History.Count)</summary>
-                <div class="history-list">
-                    @for (var i = History.Count - 1; i >= 0; i--)
-                    {
-                        var stepsBack = History.Count - i;
-                        var step = History[i];
-                        <div @key="step"
-                             class="history-row">
-                            <div class="history-meta"
-                                 title="@step.Label">
-                                <span class="history-label">@step.Label</span>
-                                <span class="history-time">шаг –@stepsBack · @step.Timestamp</span>
-                            </div>
-                            <button type="button"
-                                    class="btn-ghost history-btn"
-                                    @onclick="() => OnUndoSteps.InvokeAsync(stepsBack)"
-                                    title="Откатить до состояния перед этим шагом">
-                                <Icon Name="undo" />
-                                Вернуть
-                            </button>
-                        </div>
-                    }
-                </div>
-            </details>
         }
     </div>
-</section>
+
+    <div class="modebar-meta">
+        <select class="profile-select"
+                aria-label="Активный профиль"
+                @onchange="HandleProfileSelected"
+                title="Профиль стиля – отдельный сохранённый шаблон оформления баннера.">
+            @foreach (var p in Profiles)
+            {
+                <option @key="p.Id"
+                        value="@p.Id"
+                        selected="@(p.Id == ActiveId)">@p.Name</option>
+            }
+        </select>
+
+        <button type="button"
+                class="btn-ghost modebar-btn @(_manageOpen ? "active" : null)"
+                aria-expanded="@(_manageOpen ? "true" : "false")"
+                @onclick="ToggleManage"
+                title="Управление профилями (создать, переименовать, дублировать, удалить)">
+            <Icon Name="settings" />
+            Профиль
+        </button>
+
+        <button type="button"
+                class="mcp-pill @(McpConnected ? "live" : null)"
+                @onclick="() => OnSelectMode.InvokeAsync(WorkspaceMode.Agent)"
+                title="Статус локального MCP-моста (ws://127.0.0.1:5219/ws). Нажмите для перехода в режим «Агент и MCP».">
+            <span class="mcp-dot"></span>
+            @(McpConnected ? "MCP: онлайн" : "MCP: ожидание")
+        </button>
+    </div>
+</div>
+
+@if (_manageOpen)
+{
+    <section class="panel profile-drawer" @onkeydown="HandleKeyDown">
+        <div class="drawer-head">
+            <span class="module-head">Управление профилями</span>
+            <button type="button"
+                    class="btn-ghost drawer-close"
+                    @onclick="ToggleManage"
+                    aria-label="Закрыть управление профилями">
+                <Icon Name="x" />
+            </button>
+        </div>
+
+        <div class="grid">
+            <label class="check-label">
+                <input type="checkbox"
+                       checked="@PreserveTextOnSwitch"
+                       @onchange="e => PreserveTextOnSwitchChanged.InvokeAsync((bool)e.Value!)" />
+                Сохранять текст выпуска при смене профиля
+            </label>
+
+            @if (_renaming)
+            {
+                <div class="inline-edit">
+                    <label>Новое имя профиля<input @ref="_nameInput" @bind="_name" @bind:event="oninput" /></label>
+                    <button type="button" class="btn-ghost" @onclick="SaveName">Сохранить имя</button>
+                    <button type="button" class="btn-ghost" @onclick="CancelEdit">Отмена</button>
+                </div>
+            }
+
+            <div class="actions">
+                <button type="button"
+                        class="btn-ghost"
+                        @onclick="OnNewProfile"
+                        title="Новый профиль с демонстрационным текстом">
+                    <Icon Name="plus" />
+                    Новый
+                </button>
+                <button type="button"
+                        class="btn-ghost"
+                        @onclick="BeginRename"
+                        title="Переименовать профиль">
+                    <Icon Name="pencil" />
+                    Переименовать
+                </button>
+                <button type="button"
+                        class="btn-ghost"
+                        @onclick="OnDuplicateProfile"
+                        title="Скопировать профиль">
+                    <Icon Name="copy" />
+                    Дублировать
+                </button>
+                <button type="button"
+                        class="btn-danger"
+                        @onclick="BeginDelete"
+                        disabled="@(Profiles.Count <= 1)"
+                        title="Удалить профиль (последний удалить нельзя)">
+                    <Icon Name="trash-2" />
+                    Удалить
+                </button>
+            </div>
+
+            @if (_deleting)
+            {
+                <div class="inline-edit" role="group" aria-label="Подтверждение удаления профиля">
+                    <p>Удалить профиль «@Profiles.FirstOrDefault(p => p.Id == ActiveId)?.Name» и его историю?</p>
+                    <button type="button" class="btn-danger" @onclick="ConfirmDelete">Да, удалить профиль</button>
+                    <button type="button" class="btn-ghost" @onclick="CancelEdit">Отмена</button>
+                </div>
+            }
+        </div>
+    </section>
+}

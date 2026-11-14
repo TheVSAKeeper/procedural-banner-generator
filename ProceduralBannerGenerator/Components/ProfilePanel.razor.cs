@@ -1,11 +1,20 @@
 ﻿using Microsoft.AspNetCore.Components;
-using ProceduralBannerGenerator.Models;
 using Microsoft.AspNetCore.Components.Web;
+using ProceduralBannerGenerator.Models;
 
 namespace ProceduralBannerGenerator.Components;
 
 public sealed partial class ProfilePanel
 {
+    private static readonly (WorkspaceMode Mode, string Label, string Icon)[] Modes =
+    [
+        (WorkspaceMode.Release, "Выпуск", "file-text"),
+        (WorkspaceMode.Calibration, "Калибровка", "sliders"),
+        (WorkspaceMode.Agent, "Агент и MCP", "terminal"),
+        (WorkspaceMode.Focus, "Фокус", "maximize"),
+    ];
+
+    private bool _manageOpen;
     private bool _renaming;
     private bool _deleting;
     private bool _focusName;
@@ -14,10 +23,17 @@ public sealed partial class ProfilePanel
     private ElementReference _nameInput;
 
     [Parameter]
+    public WorkspaceMode ActiveMode { get; set; } = WorkspaceMode.Release;
+
+    [Parameter]
+    public EventCallback<WorkspaceMode> OnSelectMode { get; set; }
+
+    [Parameter]
     public bool PreserveTextOnSwitch { get; set; }
 
     [Parameter]
     public EventCallback<bool> PreserveTextOnSwitchChanged { get; set; }
+
     [Parameter]
     public IReadOnlyList<ProfileEntry> Profiles { get; set; } = [];
 
@@ -25,16 +41,7 @@ public sealed partial class ProfilePanel
     public string ActiveId { get; set; } = "";
 
     [Parameter]
-    public IReadOnlyList<HistoryEntry> History { get; set; } = [];
-
-    [Parameter]
     public bool McpConnected { get; set; }
-
-    [Parameter]
-    public bool PromptCopied { get; set; }
-
-    [Parameter]
-    public string AgentPrompt { get; set; } = "";
 
     [Parameter]
     public EventCallback<string> OnSelectProfile { get; set; }
@@ -51,12 +58,6 @@ public sealed partial class ProfilePanel
     [Parameter]
     public EventCallback OnDeleteProfile { get; set; }
 
-    [Parameter]
-    public EventCallback OnCopyAgentPrompt { get; set; }
-
-    [Parameter]
-    public EventCallback<int> OnUndoSteps { get; set; }
-
     protected override void OnParametersSet()
     {
         if (_editingId != ActiveId)
@@ -72,6 +73,15 @@ public sealed partial class ProfilePanel
         {
             _focusName = false;
             await _nameInput.FocusAsync();
+        }
+    }
+
+    private void ToggleManage()
+    {
+        _manageOpen = !_manageOpen;
+        if (!_manageOpen)
+        {
+            CancelEdit();
         }
     }
 
@@ -117,7 +127,14 @@ public sealed partial class ProfilePanel
     {
         if (e.Key == "Escape")
         {
-            CancelEdit();
+            if (_renaming || _deleting)
+            {
+                CancelEdit();
+            }
+            else
+            {
+                _manageOpen = false;
+            }
         }
         else if (e.Key == "Enter" && _renaming)
         {

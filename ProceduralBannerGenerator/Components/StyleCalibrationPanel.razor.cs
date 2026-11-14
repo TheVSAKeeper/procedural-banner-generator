@@ -5,6 +5,37 @@ namespace ProceduralBannerGenerator.Components;
 
 public sealed partial class StyleCalibrationPanel
 {
+    private enum StyleTab
+    {
+        None = 0,
+        Palette = 1,
+        Layout = 2,
+        TitleFx = 3,
+        Plate = 4,
+        Smear = 5,
+        Band = 6,
+        Accents = 7,
+        Tagline = 8,
+        Background = 9,
+        Logo = 10,
+    }
+
+    private static readonly (StyleTab Tab, string Label)[] Tabs =
+    [
+        (StyleTab.Palette, "Палитра"),
+        (StyleTab.Layout, "Раскладка"),
+        (StyleTab.TitleFx, "3D-текст"),
+        (StyleTab.Plate, "Плашка"),
+        (StyleTab.Smear, "Подмазка"),
+        (StyleTab.Band, "Полоса"),
+        (StyleTab.Accents, "Акценты"),
+        (StyleTab.Tagline, "3-я строка"),
+        (StyleTab.Background, "Фон"),
+        (StyleTab.Logo, "Лого"),
+    ];
+
+    private StyleTab _activeTab = StyleTab.Palette;
+
     [Parameter]
     [EditorRequired]
     public BannerStyle Style { get; set; } = new();

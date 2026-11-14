@@ -48,6 +48,9 @@ public sealed partial class Home(
     private CancellationTokenSource? _renderDebounce;
     private CancellationTokenSource? _promptResetCts;
 
+    private const string UiModeKey = "banner-ui-mode-v1";
+    private WorkspaceMode _mode = WorkspaceMode.Release;
+
     private IReadOnlyList<ProfileEntry> Profiles => profiles.Profiles;
 
     private string ActiveId => profiles.ActiveId;
@@ -125,6 +128,7 @@ public sealed partial class Home(
 
     protected override async Task OnInitializedAsync()
     {
+        await LoadUiModeAsync();
         var loaded = await profiles.LoadAsync(CaptureState());
         ApplyState(loaded);
         _notice = profiles.LoadNotice;
@@ -195,6 +199,40 @@ public sealed partial class Home(
     private void DismissNotice()
     {
         _notice = null;
+    }
+
+    private async Task LoadUiModeAsync()
+    {
+        try
+        {
+            var raw = await js.InvokeAsync<string?>("localStorage.getItem", UiModeKey);
+            if (Enum.TryParse<WorkspaceMode>(raw, ignoreCase: true, out var parsed) && parsed != WorkspaceMode.None)
+            {
+                _mode = parsed;
+            }
+        }
+        catch
+        {
+            // ponytail: при недоступном localStorage используется режим по умолчанию
+        }
+    }
+
+    private async Task SetModeAsync(WorkspaceMode mode)
+    {
+        if (mode == WorkspaceMode.None || mode == _mode)
+        {
+            return;
+        }
+
+        _mode = mode;
+        try
+        {
+            await js.InvokeVoidAsync("localStorage.setItem", UiModeKey, mode.ToString().ToLowerInvariant());
+        }
+        catch
+        {
+            // ponytail: при недоступном localStorage режим действует до перезагрузки
+        }
     }
 
     private static async Task<SKImage> DecodeImage(IBrowserFile file)

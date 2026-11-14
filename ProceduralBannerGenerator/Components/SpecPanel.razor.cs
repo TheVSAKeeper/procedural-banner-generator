@@ -1,9 +1,13 @@
 ﻿using Microsoft.AspNetCore.Components;
+using ProceduralBannerGenerator.Models;
 
 namespace ProceduralBannerGenerator.Components;
 
 public sealed partial class SpecPanel
 {
+    [Parameter]
+    public WorkspaceMode Mode { get; set; } = WorkspaceMode.Release;
+
     [Parameter]
     public bool HasBackground { get; set; }
     [Parameter]
