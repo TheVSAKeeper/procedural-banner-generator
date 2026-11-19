@@ -16,7 +16,7 @@
         @if (FontError is not null)
         {
             <p class="status err" role="alert">@FontError</p>
-            <button type="button" class="btn-ghost" disabled="@LoadingFont" @onclick="OnRetryFont">Повторить загрузку шрифта</button>
+            <button type="button" class="btn-ghost" @onclick="OnRetryFont">Повторить загрузку шрифта</button>
         }
         else if (!IsReady)
         {

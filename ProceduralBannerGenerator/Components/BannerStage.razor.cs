@@ -10,9 +10,6 @@ public sealed partial class BannerStage
     public string? FontError { get; set; }
 
     [Parameter]
-    public bool LoadingFont { get; set; }
-
-    [Parameter]
     public EventCallback OnRetryFont { get; set; }
 
     [Parameter]

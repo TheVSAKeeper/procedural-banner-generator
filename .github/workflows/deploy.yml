@@ -27,16 +27,42 @@ jobs:
       - name: Install wasm-tools workload
         run: dotnet workload restore ProceduralBannerGenerator/ProceduralBannerGenerator.csproj
 
+      # Project pages live under /<repo>/ – переписываем <base href> до dotnet publish,
+      # чтобы service-worker-assets.js (и .br/.gz) получили верный SRI-хэш опубликованного index.html.
+      # В service-worker.published.js baseUrl вычисляется от self.location без пост-правок.
+      - name: Set base path for project pages
+        run: |
+          sed -i 's|<base href="/" />|<base href="/${{ github.event.repository.name }}/" />|g' ProceduralBannerGenerator/wwwroot/index.html
+          grep -Fq '<base href="/${{ github.event.repository.name }}/" />' ProceduralBannerGenerator/wwwroot/index.html
+
       - name: Publish
         run: dotnet publish ProceduralBannerGenerator/ProceduralBannerGenerator.csproj -c Release -o release
 
-      # Project pages live under /<repo>/ — переписываем base под подпуть:
-      #  - index.html: <base href>
-      #  - service-worker.js (опубликованный): const base, иначе офлайн-кэш резолвит ассеты от корня домена
-      - name: Set base path for project pages
+      - name: Verify service worker manifest integrity
         run: |
-          sed -i 's|<base href="/" />|<base href="/${{ github.event.repository.name }}/" />|g' release/wwwroot/index.html
-          sed -i 's|const base = "/";|const base = "/${{ github.event.repository.name }}/";|g' release/wwwroot/service-worker.js
+          python3 - <<'PY'
+          import base64, hashlib, json, pathlib, re, sys
+          root = pathlib.Path("release/wwwroot")
+          raw = (root / "service-worker-assets.js").read_text(encoding="utf-8")
+          match = re.search(r"self\.assetsManifest\s*=\s*(\{.*\})\s*;", raw, re.S)
+          if not match:
+              print("Failed to parse service-worker-assets.js", file=sys.stderr)
+              sys.exit(1)
+          manifest = json.loads(match.group(1))
+          mismatches = []
+          for asset in manifest["assets"]:
+              path = root / asset["url"]
+              if not path.is_file():
+                  mismatches.append(f"missing: {asset['url']}")
+                  continue
+              actual = "sha256-" + base64.b64encode(hashlib.sha256(path.read_bytes()).digest()).decode()
+              if actual != asset["hash"]:
+                  mismatches.append(f"hash mismatch: {asset['url']} expected={asset['hash']} actual={actual}")
+          if mismatches:
+              print("\n".join(mismatches), file=sys.stderr)
+              sys.exit(1)
+          print(f"Verified {len(manifest['assets'])} service worker manifest assets.")
+          PY
 
       # SPA-фолбэк: любой неизвестный путь отдаёт index.html.
       - name: SPA fallback + disable Jekyll

@@ -8,11 +8,11 @@ using SkiaSharp;
 namespace ProceduralBannerGenerator.Pages;
 
 public sealed partial class Home(
-    HttpClient http,
     IJSRuntime js,
     BannerProfileService profiles,
     BannerMcpService mcp) : IAsyncDisposable
 {
+    private const string EmbeddedFontResourceName = "ProceduralBannerGenerator.Bender-Black.otf";
     private string _title = "290. ЛЕДОКОЛ XIX";
     private string _subtitle = "КОРОЛЬ МАШИННОГО ЗАЛА";
     private string _tagline = "";
@@ -37,7 +37,6 @@ public sealed partial class Home(
     private string? _error;
     private string? _notice;
     private string? _fontError;
-    private bool _loadingFont;
     private bool _disposed;
 
     private bool _mcpConnected;
@@ -133,7 +132,7 @@ public sealed partial class Home(
         ApplyState(loaded);
         _notice = profiles.LoadNotice;
         await mcp.EnsureTokenAsync();
-        await LoadFontAsync();
+        LoadFont();
 
         if (_disposed)
         {
@@ -152,22 +151,20 @@ public sealed partial class Home(
         }
     }
 
-    private async Task LoadFontAsync()
+    private void LoadFont()
     {
-        if (_loadingFont || _disposed)
+        if (_disposed || _typeface is not null)
         {
             return;
         }
 
-        _loadingFont = true;
         _fontError = null;
         try
         {
-            var bytes = await http.GetByteArrayAsync("Bender-Black.otf");
-            if (_disposed)
-            {
-                return;
-            }
+            using var stream = typeof(Home).Assembly.GetManifestResourceStream(EmbeddedFontResourceName)
+                ?? throw new InvalidOperationException("Встроенный шрифт баннера не найден в сборке");
+            var bytes = new byte[stream.Length];
+            stream.ReadExactly(bytes);
 
             using var fontData = SKData.CreateCopy(bytes);
             _typeface = SKTypeface.FromData(fontData)
@@ -178,10 +175,6 @@ public sealed partial class Home(
         catch (Exception ex)
         {
             _fontError = "Не удалось загрузить шрифт баннера: " + ex.Message;
-        }
-        finally
-        {
-            _loadingFont = false;
         }
     }
 
