@@ -1,7 +1,23 @@
 ﻿<div class="stage @(FocusLayout ? "stage-focus" : null)">
+    @if (FocusLayout)
+    {
+        @Toolbar
+    }
     <section class="monitor">
-        <span class="module-head">Выходной кадр</span>
-        <div class="monitor-screen">
+        <div class="monitor-heading">
+            <h2 class="module-head">Выходной кадр</h2>
+            @if (CompactPreview)
+            {
+                <button type="button"
+                        class="btn-ghost preview-toggle"
+                        aria-controls="banner-preview"
+                        aria-expanded="@(!_previewCollapsed ? "true" : "false")"
+                        @onclick="() => _previewCollapsed = !_previewCollapsed">
+                    @(_previewCollapsed ? "Показать превью" : "Свернуть превью")
+                </button>
+            }
+        </div>
+        <div id="banner-preview" class="monitor-screen @(CompactPreview && _previewCollapsed ? "preview-collapsed" : null)">
             @if (ImageSrc is not null)
             {
                 <img class="preview"
@@ -24,6 +40,10 @@
                role="status"
                aria-live="polite">Инициализация шрифта…</p>
         }
+        else if (RenderPending)
+        {
+            <p class="status" role="status">Кадр обновляется…</p>
+        }
         else if (Error is not null)
         {
             <p class="status err"
@@ -39,17 +59,20 @@
         }
     </section>
 
-    <section class="toolbar">
-        <span class="module-head">Действия</span>
+    @if (!FocusLayout)
+    {
+        @Toolbar
+    }
+</div>
+
+@code {
+    private RenderFragment Toolbar => @<section class="toolbar">
+        <h2 class="module-head">Действия</h2>
         <div class="actions stage-actions">
-            <a class="btn btn-primary @(ImageSrc is null ? "disabled" : null)"
-               download="banner.png"
-               href="@ImageSrc"
-               aria-disabled="@(ImageSrc is null ? "true" : "false")"
-               tabindex="@(ImageSrc is null ? -1 : 0)"
-               title="Скачать готовый баннер картинкой PNG">
+            <button type="button" class="btn btn-primary" @onclick="OnDownload" disabled="@(!IsReady)">
                 <Icon Name="download" />
-                Скачать PNG</a>
+                Скачать PNG
+            </button>
             <button type="button"
                     class="btn-ghost"
                     @onclick="OnRender"
@@ -102,6 +125,12 @@
                     Сбросить стиль
                 </button>
             }
+            @if (CanRedo)
+            {
+                <button type="button" class="btn-ghost redo-action" @onclick="OnRedo">
+                    Повторить отменённое
+                </button>
+            }
         </div>
-    </section>
-</div>
+    </section>;
+}

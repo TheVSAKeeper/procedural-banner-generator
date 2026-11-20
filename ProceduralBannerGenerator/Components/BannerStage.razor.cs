@@ -6,6 +6,8 @@ namespace ProceduralBannerGenerator.Components;
 
 public sealed partial class BannerStage
 {
+    private bool _previewCollapsed;
+
     [Parameter]
     public string? FontError { get; set; }
 
@@ -36,10 +38,19 @@ public sealed partial class BannerStage
     public EventCallback OnRender { get; set; }
 
     [Parameter]
+    public EventCallback OnDownload { get; set; }
+
+    [Parameter]
     public EventCallback OnRandomize { get; set; }
 
     [Parameter]
     public EventCallback OnUndoLastStep { get; set; }
+
+    [Parameter]
+    public bool CanRedo { get; set; }
+
+    [Parameter]
+    public EventCallback OnRedo { get; set; }
 
     [Parameter]
     public EventCallback OnResetStyle { get; set; }
@@ -49,6 +60,12 @@ public sealed partial class BannerStage
 
     [Parameter]
     public bool ShowStyleActions { get; set; }
+
+    [Parameter]
+    public bool CompactPreview { get; set; }
+
+    [Parameter]
+    public bool RenderPending { get; set; }
 
     [Parameter]
     public bool FocusLayout { get; set; }

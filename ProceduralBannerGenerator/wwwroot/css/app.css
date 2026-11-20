@@ -193,6 +193,24 @@ body::before {
     gap: 1.1rem;
 }
 
+@media (width > 880px) {
+    .workspace-release {
+        grid-template-rows: auto 1fr;
+    }
+
+    .workspace-release > .stage {
+        grid-area: 1 / 1 / 3 / 2;
+    }
+
+    .release-spec {
+        grid-area: 1 / 2;
+    }
+
+    .workspace-release > .controls {
+        grid-area: 2 / 2;
+    }
+}
+
 @media (max-width: 880px) {
     .workspace {
         grid-template-columns: 1fr;
@@ -264,7 +282,7 @@ body::before {
     font-size: 0.82rem;
     font-weight: 600;
     display: block;
-    margin-bottom: 0.9rem;
+    margin: 0 0 0.9rem;
     padding-bottom: 0.55rem;
     letter-spacing: 0.22em;
     text-transform: uppercase;
@@ -1313,6 +1331,11 @@ h1[tabindex="-1"]:focus {
     background: var(--acid);
 }
 
+.mode-tab,
+.cal-tab {
+    transition: transform 0.08s, box-shadow 0.12s;
+}
+
 .cal-body {
     display: flex;
     flex-direction: column;
@@ -1321,6 +1344,32 @@ h1[tabindex="-1"]:focus {
 
 .spec-nested {
     margin-top: 0.65rem;
+}
+
+.preview-toggle {
+    display: none;
+}
+
+.stage-focus .monitor-screen::after,
+body:has(.workspace-focus)::after {
+    content: none;
+}
+
+.storage-warning {
+    margin-bottom: 1rem;
+    border-color: var(--amber);
+}
+
+.storage-warning p {
+    margin: 0 0 0.7rem;
+}
+
+.mcp-copy-status {
+    margin: 0;
+}
+
+.history-redo {
+    margin-top: 0.7rem;
 }
 
 .row .grow {
@@ -1358,5 +1407,156 @@ h1[tabindex="-1"]:focus {
 
     .stage-actions {
         grid-template-columns: minmax(0, 1fr);
+    }
+}
+
+@media (max-width: 880px) {
+    .workspace-calibration > .stage {
+        display: contents;
+    }
+
+    .workspace-calibration .monitor {
+        position: sticky;
+        z-index: 2;
+        top: 0;
+        align-self: start;
+        animation: none;
+    }
+
+    .workspace-calibration .monitor-heading {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 0.4rem;
+    }
+
+    .workspace-calibration .monitor .module-head {
+        margin: 0;
+        padding: 0;
+        border: 0;
+    }
+
+    .workspace-calibration .preview-toggle {
+        display: inline-flex;
+        min-height: 28px;
+        padding: 0.25rem 0.5rem;
+        font-size: 0.75rem;
+        white-space: nowrap;
+    }
+
+    .workspace-calibration .monitor-screen {
+        margin-top: 0.45rem;
+    }
+
+    .workspace-calibration .monitor-screen.preview-collapsed {
+        display: none;
+    }
+
+    .workspace-calibration .preview {
+        max-height: clamp(56px, 19dvh, 145px);
+        object-fit: contain;
+    }
+
+    .workspace-calibration .controls :is(button, input, select, summary, textarea, a) {
+        scroll-margin-block-start: min(210px, 44dvh);
+    }
+}
+
+@media (max-width: 560px) {
+    .console {
+        padding: 0.8rem 0.75rem 2rem;
+    }
+
+    .masthead {
+        margin-bottom: 0.75rem;
+    }
+
+    .masthead h1 {
+        font-size: clamp(1rem, 5.25vw, 1.7rem);
+    }
+
+    .hazard {
+        height: 4px;
+        margin-top: 0.4rem;
+    }
+
+    .modebar {
+        padding: 0.5rem;
+    }
+
+    .modebar-row {
+        gap: 0.45rem;
+    }
+
+    .mode-tabs {
+        display: grid;
+        width: 100%;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+
+    .mode-tab {
+        min-height: 30px;
+        justify-content: center;
+        padding: 0.2rem 0.35rem;
+    }
+
+    .modebar-meta {
+        flex: 1 1 100%;
+        gap: 0.35rem;
+    }
+
+    .profile-select {
+        flex: 1 1 6.5rem;
+        min-width: 0;
+    }
+
+    .modebar-meta > button {
+        min-height: 31px;
+        padding-inline: 0.4rem;
+    }
+
+    .workspace,
+    .stage,
+    .controls {
+        gap: 0.65rem;
+    }
+
+    .workspace-release .preview {
+        max-height: 115px;
+        object-fit: contain;
+    }
+
+    .workspace-release .monitor,
+    .workspace-release .toolbar,
+    .workspace-focus .toolbar {
+        padding: 0.5rem;
+    }
+
+    .workspace-release .toolbar .module-head,
+    .workspace-focus .toolbar .module-head {
+        margin-bottom: 0.4rem;
+        padding-bottom: 0.3rem;
+    }
+
+    .workspace-release .stage-actions {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+
+    .workspace-release .stage-actions > * {
+        min-height: 32px;
+        padding: 0.25rem 0.4rem;
+    }
+}
+
+@media (forced-colors: active) {
+    [role="tab"][aria-selected="true"],
+    .profile-chip[aria-pressed="true"] {
+        text-decoration: underline 2px;
+        text-underline-offset: 0.25em;
+    }
+
+    :is(.grid input, .grid textarea.spec-textarea, .profile-select, .prow .pnum):focus-visible {
+        outline: 2px solid Highlight;
+        outline-offset: 2px;
     }
 }

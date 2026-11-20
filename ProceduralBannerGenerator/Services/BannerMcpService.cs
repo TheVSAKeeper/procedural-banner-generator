@@ -51,9 +51,9 @@ public sealed class BannerMcpService(BannerProfileService profiles, IJSRuntime j
         }
     }
 
-    public async Task CopyAgentPromptAsync()
+    public ValueTask<bool> CopyAgentPromptAsync()
     {
-        await js.InvokeAsync<bool>("bannerMcp.copyText", BuildAgentPrompt());
+        return js.InvokeAsync<bool>("bannerMcp.copyText", BuildAgentPrompt());
     }
 
     public string BuildAgentPrompt()

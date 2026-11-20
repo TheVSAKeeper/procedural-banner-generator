@@ -13,4 +13,10 @@ public sealed partial class HistoryPanel
 
     [Parameter]
     public EventCallback<int> OnUndoSteps { get; set; }
+
+    [Parameter]
+    public bool CanRedo { get; set; }
+
+    [Parameter]
+    public EventCallback OnRedo { get; set; }
 }

@@ -1,5 +1,5 @@
 ﻿<section class="panel">
-    <span class="module-head">Калибровка стиля</span>
+    <h2 class="module-head">Калибровка стиля</h2>
     <div class="cal-tabs" role="tablist" aria-label="Секции калибровки стиля">
         @foreach (var tab in Tabs)
         {
@@ -7,13 +7,23 @@
             <button @key="tab.Tab"
                     type="button"
                     role="tab"
+                    id="@($"style-tab-{tab.Tab}")"
+                    aria-controls="@($"style-panel-{tab.Tab}")"
                     aria-selected="@(active ? "true" : "false")"
+                    tabindex="@(active ? 0 : -1)"
                     class="cal-tab @(active ? "active" : null)"
                     @onclick="() => _activeTab = tab.Tab">@tab.Label</button>
         }
     </div>
 
-    <div class="cal-body" role="tabpanel">
+    @foreach (var item in Tabs)
+    {
+        if (item.Tab != _activeTab)
+        {
+            <div hidden role="tabpanel" id="@($"style-panel-{item.Tab}")" aria-labelledby="@($"style-tab-{item.Tab}")"></div>
+        }
+    }
+    <div class="cal-body" role="tabpanel" id="@($"style-panel-{_activeTab}")" aria-labelledby="@($"style-tab-{_activeTab}")">
         @switch (_activeTab)
         {
             case StyleTab.Palette:

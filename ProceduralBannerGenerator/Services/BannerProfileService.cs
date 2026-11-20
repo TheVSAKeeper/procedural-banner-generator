@@ -15,11 +15,21 @@ public sealed class BannerProfileService(IJSRuntime js)
     private List<ProfileEntry> _profiles = [];
     private long _lastManualPushTicks;
     private string _lastManualPushProfileId = "";
-    private bool _canPersist = true;
+    private bool _storageReadFailed;
+    private (string Key, string Json)? _damagedBackup;
+    private readonly Dictionary<string, RedoEntry> _redo = [];
+
+    private sealed record RedoEntry(SavedState From, SavedState To, HistoryEntry[] Steps, int HistoryCount, HistoryEntry? LastStep);
 
     public bool PreserveTextOnSwitch { get; private set; }
 
     public string? LoadNotice { get; private set; }
+
+    public bool StorageWriteFailed { get; private set; }
+
+    public bool CanRetryStorage => !_storageReadFailed;
+
+    public bool CanRedo => ActiveProfile is { } active && FindRedo(active) is not null;
 
     public IReadOnlyList<ProfileEntry> Profiles => _profiles;
 
@@ -164,7 +174,7 @@ public sealed class BannerProfileService(IJSRuntime js)
         var sourceKey = ProfilesKey;
         try
         {
-            raw = await js.InvokeAsync<string?>("localStorage.getItem", ProfilesKey);
+            raw = await ReadStorageAsync(ProfilesKey);
             if (!string.IsNullOrEmpty(raw))
             {
                 using var document = JsonDocument.Parse(raw);
@@ -208,7 +218,7 @@ public sealed class BannerProfileService(IJSRuntime js)
 
             // Миграция одиночного снимка banner-state-v1 → профиль «Локальный» (ничего не теряем).
             sourceKey = StorageKey;
-            raw = await js.InvokeAsync<string?>("localStorage.getItem", StorageKey);
+            raw = await ReadStorageAsync(StorageKey);
             var migrated = string.IsNullOrEmpty(raw) ? null : JsonSerializer.Deserialize<SavedState>(raw);
             if (migrated is not null)
             {
@@ -232,18 +242,43 @@ public sealed class BannerProfileService(IJSRuntime js)
         }
     }
 
-    private async Task BackupDamagedAsync(string key, string raw)
+    private async Task<string?> ReadStorageAsync(string key)
     {
         try
         {
-            var backupKey = $"{key}-damaged-{Guid.NewGuid():N}";
-            await js.InvokeVoidAsync("localStorage.setItem", backupKey, raw);
-            LoadNotice = $"Повреждённые записи пропущены. Исходный JSON сохранён в localStorage: {backupKey}";
+            return await js.InvokeAsync<string?>("localStorage.getItem", key);
         }
         catch
         {
-            _canPersist = false;
-            LoadNotice = "Не удалось сохранить резервную копию повреждённых профилей. Исходное хранилище оставлено без изменений; новые правки действуют только до перезагрузки.";
+            _storageReadFailed = true;
+            StorageWriteFailed = true;
+            throw;
+        }
+    }
+
+    private async Task BackupDamagedAsync(string key, string raw)
+    {
+        _damagedBackup = ($"{key}-damaged-{Guid.NewGuid():N}", raw);
+        await WriteDamagedBackupAsync();
+    }
+
+    private async Task WriteDamagedBackupAsync()
+    {
+        if (_damagedBackup is not { } backup)
+        {
+            return;
+        }
+
+        try
+        {
+            await js.InvokeVoidAsync("localStorage.setItem", backup.Key, backup.Json);
+            _damagedBackup = null;
+            LoadNotice = $"Повреждённые записи пропущены. Исходный JSON сохранён в localStorage: {backup.Key}";
+        }
+        catch (JSException)
+        {
+            StorageWriteFailed = true;
+            LoadNotice = "Не удалось создать резервную копию повреждённых записей.";
         }
     }
 
@@ -376,16 +411,43 @@ public sealed class BannerProfileService(IJSRuntime js)
 
         var count = Math.Clamp(steps, 1, active.History.Count);
         var targetEntry = active.History[^count];
+        var removed = active.History.TakeLast(count).ToArray();
         active.History.RemoveRange(active.History.Count - count, count);
+        _redo[active.Id] = new(targetEntry.State, active.State, removed, active.History.Count, active.History.LastOrDefault());
         active.State = targetEntry.State;
         _lastManualPushTicks = 0;
 
         var notice = count == 1
             ? $"Откат: {targetEntry.Label}"
-            : $"Откат на {count} шаг. ({targetEntry.Label})";
+            : $"Выполнен откат. Шагов отменено: {count}. {targetEntry.Label}";
 
         await PersistAsync();
         return (active.State, notice);
+    }
+
+    public async Task<SavedState?> RedoAsync()
+    {
+        if (ActiveProfile is not { } active || FindRedo(active) is not { } redo)
+        {
+            return null;
+        }
+
+        _redo.Remove(active.Id);
+        active.History.AddRange(redo.Steps);
+        active.State = redo.To;
+        ResetManualCoalesce();
+        await PersistAsync();
+        return redo.To;
+    }
+
+    private RedoEntry? FindRedo(ProfileEntry profile)
+    {
+        return _redo.TryGetValue(profile.Id, out var redo)
+            && redo.From == profile.State
+            && redo.HistoryCount == profile.History.Count
+            && ReferenceEquals(redo.LastStep, profile.History.LastOrDefault())
+            ? redo
+            : null;
     }
 
     public async Task<SavedState?> SelectProfileAsync(string id)
@@ -549,6 +611,15 @@ public sealed class BannerProfileService(IJSRuntime js)
 
     public async Task PersistAsync()
     {
+        foreach (var id in _redo.Keys.ToArray())
+        {
+            var profile = _profiles.FirstOrDefault(p => p.Id == id);
+            if (profile is null || FindRedo(profile) is null)
+            {
+                _redo.Remove(id);
+            }
+        }
+
         foreach (var profile in _profiles)
         {
             ValidateState(profile.State);
@@ -558,26 +629,36 @@ public sealed class BannerProfileService(IJSRuntime js)
             }
         }
 
-        if (!_canPersist)
+        if (_storageReadFailed || _damagedBackup is not null)
         {
             return;
         }
 
         try
         {
-            var store = new ProfileStore
-            {
-                ActiveId = ActiveId,
-                PreserveTextOnSwitch = PreserveTextOnSwitch,
-                Profiles = _profiles,
-            };
-
-            await js.InvokeVoidAsync("localStorage.setItem", ProfilesKey, JsonSerializer.Serialize(store));
+            await js.InvokeVoidAsync("localStorage.setItem", ProfilesKey, GetBackupJson());
+            StorageWriteFailed = false;
         }
-        catch
+        catch (JSException)
         {
-            // ponytail: localStorage может быть недоступен (private mode / quota / отключён) – тихо без сохранения
+            StorageWriteFailed = true;
         }
+    }
+
+    public async Task RetryStorageAsync()
+    {
+        await WriteDamagedBackupAsync();
+        await PersistAsync();
+    }
+
+    public string GetBackupJson()
+    {
+        return JsonSerializer.Serialize(new ProfileStore
+        {
+            ActiveId = ActiveId,
+            PreserveTextOnSwitch = PreserveTextOnSwitch,
+            Profiles = _profiles,
+        });
     }
 
     public string NextProfileName()

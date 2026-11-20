@@ -40,12 +40,12 @@ public sealed partial class Home(
     private bool _disposed;
 
     private bool _mcpConnected;
-    private bool _promptCopied;
+    private string? _promptFeedback;
+    private bool _renderPending;
     private DotNetObjectReference<Home>? _dotNetRef;
 
     private int _renderDebounceMs = 150;
     private CancellationTokenSource? _renderDebounce;
-    private CancellationTokenSource? _promptResetCts;
 
     private const string UiModeKey = "banner-ui-mode-v1";
     private WorkspaceMode _mode = WorkspaceMode.Release;
@@ -63,8 +63,6 @@ public sealed partial class Home(
         _disposed = true;
         _renderDebounce?.Cancel();
         _renderDebounce?.Dispose();
-        _promptResetCts?.Cancel();
-        _promptResetCts?.Dispose();
         foreach (var image in _images.Values)
         {
             image.Background?.Dispose();
@@ -218,6 +216,7 @@ public sealed partial class Home(
         }
 
         _mode = mode;
+        _promptFeedback = null;
         try
         {
             await js.InvokeVoidAsync("localStorage.setItem", UiModeKey, mode.ToString().ToLowerInvariant());
@@ -252,27 +251,18 @@ public sealed partial class Home(
 
     private async Task CopyAgentPrompt()
     {
-        _promptResetCts?.Cancel();
-        _promptResetCts?.Dispose();
-        var cts = new CancellationTokenSource();
-        _promptResetCts = cts;
-
+        var copied = false;
         try
         {
-            await mcp.CopyAgentPromptAsync();
-            _promptCopied = true;
-            _notice = "Промпт для агента скопирован – вставьте его в чат агента";
-            StateHasChanged();
-            await Task.Delay(2200, cts.Token);
-            _promptCopied = false;
+            copied = await mcp.CopyAgentPromptAsync();
         }
-        catch (TaskCanceledException)
+        catch (JSException)
         {
         }
-        catch (Exception ex)
-        {
-            _error = "Не удалось скопировать промпт: " + ex.Message;
-        }
+
+        _promptFeedback = copied
+            ? "Инструкция скопирована. Вставьте её в чат агента."
+            : "Буфер обмена недоступен. Выделите и скопируйте инструкцию из поля ниже.";
     }
 
     private async Task Randomize()
@@ -309,6 +299,33 @@ public sealed partial class Home(
         _error = null;
         _notice = undone.Value.Notice;
         Render();
+    }
+
+    private async Task RedoAsync()
+    {
+        await FlushActiveProfileAsync();
+        if (await profiles.RedoAsync() is { } state)
+        {
+            ApplyState(state);
+            _notice = "Отменённые изменения восстановлены.";
+            Render();
+        }
+    }
+
+    private async Task RetryProfileStorageAsync()
+    {
+        await FlushActiveProfileAsync();
+        await profiles.RetryStorageAsync();
+        if (!profiles.StorageWriteFailed)
+        {
+            _notice = "Профили сохранены в браузере.";
+        }
+    }
+
+    private async Task DownloadProfileBackupAsync()
+    {
+        await FlushActiveProfileAsync();
+        await js.InvokeVoidAsync("bannerUi.downloadJson", profiles.GetBackupJson(), "banner-profiles.json");
     }
 
     private async Task SelectProfileAsync(string id)
@@ -371,6 +388,7 @@ public sealed partial class Home(
     private async Task FlushActiveProfileAsync(bool render = true)
     {
         _renderDebounce?.Cancel();
+        _renderPending = false;
         if (await profiles.FlushActiveProfileAsync(CaptureState()) && render)
         {
             Render();
@@ -381,6 +399,7 @@ public sealed partial class Home(
     private async Task RequestRender()
     {
         _notice = null;
+        _renderPending = true;
         _renderDebounce?.Cancel();
         _renderDebounce?.Dispose();
         var cts = new CancellationTokenSource();
@@ -395,16 +414,47 @@ public sealed partial class Home(
             return;
         }
 
+        if (cts.IsCancellationRequested || !ReferenceEquals(_renderDebounce, cts))
+        {
+            return;
+        }
+
         try
         {
-            _style.Validate();
-            Render();
-            await profiles.CommitUiStateAsync(CaptureState());
+            await FinishRenderAsync(download: false);
         }
         catch (Exception ex)
         {
+            _renderPending = false;
             _error = ex.Message;
         }
+    }
+
+    private async Task FinishRenderAsync(bool download)
+    {
+        _renderDebounce?.Cancel();
+        _renderPending = false;
+        if (!Render() || _imgSrc is not { } rendered)
+        {
+            return;
+        }
+
+        if (!download)
+        {
+            await profiles.CommitUiStateAsync(CaptureState());
+            return;
+        }
+
+        var save = profiles.FlushActiveProfileAsync(CaptureState());
+        try
+        {
+            await js.InvokeVoidAsync("bannerUi.downloadFile", rendered, "banner.png");
+        }
+        catch (JSException)
+        {
+            _error = "Не удалось скачать PNG. Попробуйте ещё раз.";
+        }
+        await save;
     }
 
     private async Task UploadBackground(InputFileChangeEventArgs e)
@@ -501,23 +551,26 @@ public sealed partial class Home(
         await profiles.CommitUiStateAsync(CaptureState(), "Удаление логотипа");
     }
 
-    private void Render()
+    private bool Render()
     {
+        _renderPending = false;
         if (_typeface is null)
         {
-            return;
+            return false;
         }
-
-        _exportHref = "data:application/json;charset=utf-8," + Uri.EscapeDataString(_style.ToJson());
 
         try
         {
+            _style.Validate();
+            _exportHref = "data:application/json;charset=utf-8," + Uri.EscapeDataString(_style.ToJson());
             _imgSrc = "data:image/png;base64," + RenderStateToBase64(CaptureState(), ActiveId);
             _error = null;
+            return true;
         }
         catch (Exception ex)
         {
             _error = ex.Message;
+            return false;
         }
     }
 
@@ -565,19 +618,31 @@ public sealed partial class Home(
 
     private async Task ImportStyle(InputFileChangeEventArgs e)
     {
+        _notice = null;
         try
         {
             await using var stream = e.File.OpenReadStream(1024 * 1024);
             using var reader = new StreamReader(stream);
             _style = BannerStyle.FromJson(await reader.ReadToEndAsync());
             _error = null;
-            _notice = null;
-            Render();
+            var rendered = Render();
             await profiles.CommitUiStateAsync(CaptureState(), "Импорт стиля");
+            if (rendered)
+            {
+                _notice = "Стиль загружен в активный профиль.";
+            }
+        }
+        catch (System.Text.Json.JsonException)
+        {
+            _error = "Не удалось прочитать JSON стиля. Выберите исправный файл, экспортированный из генератора.";
+        }
+        catch (IOException)
+        {
+            _error = "Не удалось открыть файл стиля. Выберите JSON размером до 1 МБ.";
         }
         catch (Exception ex)
         {
-            _error = "Импорт стиля не удался: " + ex.Message;
+            _error = $"Стиль не загружен. Проверьте параметры файла. {ex.Message}";
         }
     }
 

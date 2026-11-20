@@ -7,7 +7,10 @@
                 <button @key="item.Mode"
                         type="button"
                         role="tab"
+                        id="@($"workspace-tab-{item.Mode}")"
+                        aria-controls="@($"workspace-panel-{item.Mode}")"
                         aria-selected="@(active ? "true" : "false")"
+                        tabindex="@(active ? 0 : -1)"
                         class="mode-tab @(active ? "active" : null)"
                         @onclick="() => OnSelectMode.InvokeAsync(item.Mode)">
                     <Icon Name="@item.Icon" />
@@ -79,7 +82,7 @@
 {
     <section class="panel profile-drawer" @onkeydown="HandleKeyDown">
         <div class="drawer-head">
-            <span class="module-head">Управление профилями</span>
+            <h2 class="module-head">Управление профилями</h2>
             <button type="button"
                     class="btn-ghost drawer-close"
                     @onclick="ToggleManage"

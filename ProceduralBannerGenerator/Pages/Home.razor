@@ -21,7 +21,49 @@
                   OnDuplicateProfile="DuplicateProfile"
                   OnDeleteProfile="DeleteProfile" />
 
-    <div class="workspace @(_mode == WorkspaceMode.Focus ? "workspace-focus" : null)">
+    @if (profiles.StorageWriteFailed)
+    {
+        <section class="panel storage-warning" aria-labelledby="storage-warning-heading">
+            <h2 class="module-head" id="storage-warning-heading">Сохранение профилей</h2>
+            <p role="alert">
+                @(profiles.CanRetryStorage
+                    ? "Изменения остались в этой вкладке. Скачайте копию профилей перед закрытием страницы."
+                    : "Не удалось открыть сохранённые профили. Скачайте копию работы из этой вкладки перед её закрытием.")
+            </p>
+            <div class="actions">
+                @if (profiles.CanRetryStorage)
+                {
+                    <button type="button" class="btn-ghost" @onclick="RetryProfileStorageAsync">Повторить сохранение</button>
+                }
+                <button type="button" class="btn-ghost" @onclick="DownloadProfileBackupAsync">Скачать копию профилей</button>
+            </div>
+        </section>
+    }
+
+    @foreach (var mode in Enum.GetValues<WorkspaceMode>())
+    {
+        if (mode != WorkspaceMode.None && mode != _mode)
+        {
+            <div hidden role="tabpanel" id="@($"workspace-panel-{mode}")" aria-labelledby="@($"workspace-tab-{mode}")"></div>
+        }
+    }
+
+    <div class="@($"workspace workspace-{_mode.ToString().ToLowerInvariant()}")"
+         role="tabpanel"
+         id="@($"workspace-panel-{_mode}")"
+         aria-labelledby="@($"workspace-tab-{_mode}")">
+        @if (_mode == WorkspaceMode.Release)
+        {
+            <div class="release-spec">
+                <SpecPanel Mode="WorkspaceMode.Release"
+                           @bind-Title="_title"
+                           @bind-Subtitle="_subtitle"
+                           @bind-Tagline="_tagline"
+                           @bind-Seed="_seed"
+                           OnChange="RequestRender" />
+            </div>
+        }
+
         <BannerStage ImageSrc="@_imgSrc"
                      ExportHref="@_exportHref"
                      IsReady="@(_typeface is not null)"
@@ -32,10 +74,15 @@
                      OnDismissNotice="DismissNotice"
                      History="@ActiveHistory"
                      ShowStyleActions="@(_mode == WorkspaceMode.Calibration)"
+                     CompactPreview="@(_mode == WorkspaceMode.Calibration)"
                      FocusLayout="@(_mode == WorkspaceMode.Focus)"
-                     OnRender="Render"
+                     RenderPending="@_renderPending"
+                     OnRender="() => FinishRenderAsync(download: false)"
+                     OnDownload="() => FinishRenderAsync(download: true)"
                      OnRandomize="Randomize"
                      OnUndoLastStep="UndoLastStepAsync"
+                     CanRedo="@(profiles.CanRedo && _mode is WorkspaceMode.Release or WorkspaceMode.Focus)"
+                     OnRedo="RedoAsync"
                      OnResetStyle="ResetStyle"
                      OnImportStyle="ImportStyle" />
 
@@ -44,20 +91,8 @@
             <div class="controls">
                 @if (_mode == WorkspaceMode.Release)
                 {
-                    <SpecPanel Mode="WorkspaceMode.Release"
-                               @bind-Title="_title"
-                               @bind-Subtitle="_subtitle"
-                               @bind-Tagline="_tagline"
-                               @bind-Seed="_seed"
-                               @bind-Width="_width"
-                               @bind-Height="_height"
-                               @bind-RenderDebounceMs="_renderDebounceMs"
-                               @bind-Transparent="_transparent"
-                               HasBackground="@(Background is not null)"
-                               OnChange="RequestRender" />
-
                     <section class="panel">
-                        <span class="module-head">Фон выпуска</span>
+                        <h2 class="module-head">Фон выпуска</h2>
                         <p class="hint">Картинка относится только к текущему профилю и хранится до перезагрузки страницы.</p>
                         <div class="image-actions">
                             @BackgroundControls
@@ -66,6 +101,9 @@
                 }
                 else if (_mode == WorkspaceMode.Calibration)
                 {
+                    <StyleCalibrationPanel @bind-Style="_style"
+                                           @bind-Style:after="RequestRender" />
+
                     <SpecPanel Mode="WorkspaceMode.Calibration"
                                @bind-Title="_title"
                                @bind-Subtitle="_subtitle"
@@ -79,7 +117,7 @@
                                OnChange="RequestRender" />
 
                     <section class="panel">
-                        <span class="module-head">Фон и логотип</span>
+                        <h2 class="module-head">Фон и логотип</h2>
                         <p class="hint">Картинки относятся только к текущему профилю и хранятся до перезагрузки страницы.</p>
                         <div class="image-actions">
                             @BackgroundControls
@@ -95,17 +133,16 @@
                         </div>
                     </section>
 
-                    <StyleCalibrationPanel @bind-Style="_style"
-                                           @bind-Style:after="RequestRender" />
-
                     <HistoryPanel History="@ActiveHistory"
                                   Collapsible="true"
+                                  CanRedo="@profiles.CanRedo"
+                                  OnRedo="RedoAsync"
                                   OnUndoSteps="UndoStepsAsync" />
                 }
                 else if (_mode == WorkspaceMode.Agent)
                 {
                     <section class="panel">
-                        <span class="module-head">Подключение агента (MCP)</span>
+                        <h2 class="module-head">Подключение агента (MCP)</h2>
                         <div class="grid">
                             <div class="mcp-bar mcp-bar-top">
                                 <span class="mcp-status @( _mcpConnected ? "live" : null)"
@@ -115,12 +152,12 @@
                                 </span>
                                 <button type="button"
                                         class="btn"
-                                        @onclick="CopyAgentPrompt"
-                                        title="Скопировать промпт в буфер обмена и вставить в любого агента (Claude Code, Codex, Cursor, Antigravity) для подключения по MCP">
-                                    <Icon Name="@(_promptCopied ? "check" : "terminal")" />
-                                    @(_promptCopied ? "Промпт скопирован" : "Промпт для агента (MCP)")
+                                        @onclick="CopyAgentPrompt">
+                                    <Icon Name="copy" />
+                                    Скопировать инструкцию для агента
                                 </button>
                             </div>
+                            <p class="mcp-copy-status" role="status">@_promptFeedback</p>
                             <textarea class="mcp-prompt-view"
                                       aria-label="Промпт установки MCP для агента"
                                       rows="8"
@@ -131,6 +168,8 @@
 
                     <HistoryPanel History="@ActiveHistory"
                                   Collapsible="false"
+                                  CanRedo="@profiles.CanRedo"
+                                  OnRedo="RedoAsync"
                                   OnUndoSteps="UndoStepsAsync" />
                 }
             </div>

@@ -1,5 +1,5 @@
 ﻿<section class="panel">
-    <span class="module-head">История шагов (@History.Count)</span>
+    <h2 class="module-head">История шагов (@History.Count)</h2>
     @if (History.Count == 0)
     {
         <p class="hint">История изменений этого профиля пока пуста.</p>
@@ -15,6 +15,10 @@
     {
         @HistoryList
     }
+    @if (CanRedo)
+    {
+        <button type="button" class="btn-ghost history-redo" @onclick="OnRedo">Повторить отменённое</button>
+    }
 </section>
 
 @code {
@@ -25,6 +29,7 @@
             {
                 var stepsBack = History.Count - i;
                 var step = History[i];
+                var undoLabel = stepsBack == 1 ? "Откатить шаг" : $"Откатить {stepsBack} {(stepsBack <= 4 ? "шага" : "шагов")}";
                 <div @key="step"
                      class="history-row">
                     <div class="history-meta"
@@ -35,9 +40,10 @@
                     <button type="button"
                             class="btn-ghost history-btn"
                             @onclick="() => OnUndoSteps.InvokeAsync(stepsBack)"
+                            aria-label="@($"{undoLabel}. {step.Label}, {step.Timestamp}")"
                             title="Откатить до состояния перед этим шагом">
                         <Icon Name="undo" />
-                        Вернуть
+                        @undoLabel
                     </button>
                 </div>
             }

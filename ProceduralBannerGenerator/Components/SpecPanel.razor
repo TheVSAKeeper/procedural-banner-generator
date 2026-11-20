@@ -1,5 +1,5 @@
 ﻿<section class="panel">
-    <span class="module-head">@(Mode == WorkspaceMode.Calibration ? "Кадр и отрисовка" : "Параметры выпуска")</span>
+    <h2 class="module-head">@(Mode == WorkspaceMode.Calibration ? "Кадр и отрисовка" : "Параметры выпуска")</h2>
     <div class="grid">
         @if (Mode == WorkspaceMode.Calibration)
         {
@@ -57,16 +57,19 @@
     {
         <label>Заголовок<textarea class="spec-textarea"
                                   rows="1"
+                                  @bind:event="oninput"
                                   @bind:get="Title"
                                   @bind:set="OnTitleInput"
                                   placeholder="290. ЛЕДОКОЛ XIX"></textarea></label>
         <label>Подзаголовок<textarea class="spec-textarea"
                                      rows="1"
+                                     @bind:event="oninput"
                                      @bind:get="Subtitle"
                                      @bind:set="OnSubtitleInput"
                                      placeholder="КОРОЛЬ МАШИННОГО ЗАЛА"></textarea></label>
         <label>Третья строка<textarea class="spec-textarea"
                                       rows="1"
+                                      @bind:event="oninput"
                                       @bind:get="Tagline"
                                       @bind:set="OnTaglineInput"
                                       placeholder="ник / дата / тег (необязательно)"></textarea></label>
